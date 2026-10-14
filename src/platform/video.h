@@ -29,9 +29,16 @@ int video_view_w(void);
 int video_view_h(void);
 
 /* begin: adapts the view to the current window size, targets it and clears it.
- * end: scales the view to the window and presents. */
+ * compose: scales the view to the window, which is then the target (window pixels, e.g. for
+ * interface windows drawn at full resolution). present: shows the frame. */
 void video_begin_frame(void);
-void video_end_frame(void);
+void video_compose(void);
+void video_present(void);
+
+/* The window's size in pixels. */
+void video_output_size(int *w, int *h);
+/* The refresh rate of the window's display, in Hz (60 if it isn't known). */
+int video_refresh_rate(void);
 
 /* 0 = black, 255 = full brightness. Applied to the whole frame when presenting. */
 void video_set_fade(uint8_t level);

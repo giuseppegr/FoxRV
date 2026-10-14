@@ -5,9 +5,10 @@
             "name": "Debug: game",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/foxrv",
+            "program": "${workspaceFolder}/build-debug/FoxRV",
             "args": [
-                "${input:level}"
+                "${input:level}",
+                "--debug"
             ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build: debug",
@@ -26,7 +27,7 @@
             "name": "Debug: selftest",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/foxrv",
+            "program": "${workspaceFolder}/build-debug/FoxRV",
             "args": [
                 "--selftest"
             ],
@@ -40,7 +41,7 @@
             "name": "Run: game (release)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/foxrv",
+            "program": "${workspaceFolder}/build/FoxRV",
             "args": [
                 "${input:level}"
             ],
@@ -54,7 +55,7 @@
             "name": "Debug: dump OPL writes",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build-debug/foxrv",
+            "program": "${workspaceFolder}/build-debug/FoxRV",
             "args": [
                 "--dump-opl",
                 "${input:song}",

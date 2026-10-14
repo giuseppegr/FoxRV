@@ -16,6 +16,7 @@ typedef struct {
     SDL_Texture *tex;           /* the glyphs side by side */
     int w, h;                   /* glyph size */
     int8_t glyph[128];          /* ASCII -> glyph index, -1 = none */
+    SDL_Color color;            /* the glyphs' main colour (the text yellow) */
 } Font;
 
 bool font_load(Font *f, SDL_Renderer *r);

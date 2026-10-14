@@ -57,12 +57,22 @@ add_executable(foxrv
     src/game/enemies.c
     src/game/ending.c
     src/game/menu.c
+    src/game/options.c
     src/game/game.c
     src/game/selftest.c
 )
+set_target_properties(foxrv PROPERTIES OUTPUT_NAME FoxRV)    # FoxRV.exe / FoxRV; the target stays foxrv
 target_include_directories(foxrv PRIVATE src)
 target_link_libraries(foxrv PRIVATE SDL3::SDL3-static thirdparty m)
 target_compile_options(foxrv PRIVATE -Wall -Wextra -Wshadow -Wno-unused-parameter)
+
+# Windows: the .exe's icon, and a GUI program, so no console window opens. --debug,
+# --selftest and --dump-opl attach to the terminal they were started from (or open a console).
+if(WIN32)
+    enable_language(RC)
+    target_sources(foxrv PRIVATE res/foxrv.rc)
+    set_target_properties(foxrv PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 
 # engine.ini is read from the working directory or next to the binary.
 add_custom_command(TARGET foxrv POST_BUILD

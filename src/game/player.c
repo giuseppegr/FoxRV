@@ -734,7 +734,7 @@ static void throw_object(Ctx *c, int state)                          /* 0x4AD6 *
     if (!p->carry)
         return;
     int vx = 0, vy = -0xA0;          /* with up held: straight up */
-    if (!c->in->jump) {
+    if (!c->in->jump && !c->in->up) {
         vy = 0;
         vx = (p->sprite & SPRITE_MIRROR) ? -0xE0 : 0xE0;
         o->carry.y = p->y - 16;

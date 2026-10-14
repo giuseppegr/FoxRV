@@ -88,12 +88,24 @@
             "label": "test: selftest",
             "detail": "Headless physics checks against the original's values",
             "type": "shell",
-            "command": "${workspaceFolder}/build-debug/foxrv",
+            "command": "${workspaceFolder}/build-debug/FoxRV",
             "args": [
                 "--selftest"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
+            },
+            // FoxRV.exe is a GUI program: PowerShell waits for it only when its output is piped.
+            "windows": {
+                "command": "& '${workspaceFolder}/build-debug/FoxRV.exe' --selftest | Out-Host; exit $LASTEXITCODE",
+                "args": [],
+                "options": {
+                    "cwd": "${workspaceFolder}",
+                    "shell": {
+                        "executable": "powershell.exe",
+                        "args": ["-NoProfile", "-Command"]
+                    }
+                }
             },
             "dependsOn": "build: debug",
             "group": {

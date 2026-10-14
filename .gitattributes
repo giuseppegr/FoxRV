@@ -1,0 +1,3 @@
+# Each script with the line endings its shell needs, whatever the checkout settings.
+*.sh text eol=lf
+*.cmd text eol=crlf

@@ -1,0 +1,2 @@
+// Windows resources: the executable's icon (drawn by tools/make_icon.py).
+IDI_ICON1 ICON "foxrv.ico"

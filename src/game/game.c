@@ -51,9 +51,8 @@ static GameTuning tuning = {.interpolate = true, .start_lives = -1, .restart_lev
 static bool tuning_ready;
 
 static const char *const difficulty_names[DIFF_COUNT] = {"HIGH", "MEDIUM", "LOW"};
-static char difficulty_item[32];    /* "DIFFICULTY  HIGH", rewritten when it changes */
-static const char *const main_items[] = {"START GAME", "PASSWORD", difficulty_item, "QUIT"};
-enum { MAIN_START, MAIN_PASSWORD, MAIN_DIFFICULTY, MAIN_QUIT };
+static const char *const main_items[] = {"START GAME", "PASSWORD", "OPTIONS", "QUIT"};
+enum { MAIN_START, MAIN_PASSWORD, MAIN_OPTIONS, MAIN_QUIT };
 static const char *const pause_items[] = {"CONTINUE", "RESTART LEVEL", "MAIN MENU", "QUIT GAME"};
 enum { PAUSE_CONTINUE, PAUSE_RESTART, PAUSE_MENU, PAUSE_QUIT };
 
@@ -79,6 +78,10 @@ bool game_config(const char *section, const char *key, const char *value)
     int v = atoi(value);
     if (!SDL_strcasecmp(section, "engine") && !SDL_strcasecmp(key, "interpolate")) {
         t->interpolate = parse_bool(value);
+        return true;
+    }
+    if (!SDL_strcasecmp(section, "input") && !SDL_strcasecmp(key, "pad_up_jumps")) {
+        t->pad_up_jumps = parse_bool(value);
         return true;
     }
     if (!SDL_strcasecmp(section, "camera")) {
@@ -262,14 +265,8 @@ static void respawn(Game *g)
     g->phase = PHASE_PLAY;
 }
 
-static void name_difficulty(void)
-{
-    SDL_snprintf(difficulty_item, sizeof difficulty_item, "DIFFICULTY  %s", difficulty_names[tuning.difficulty]);
-}
-
 static void open_menu(Game *g, int sel)
 {
-    name_difficulty();
     g->mode = MODE_MENU;
     menu_list_init(&g->menu, main_items, (int)SDL_arraysize(main_items), sel);
     if (g->song != SONG_TITLE)
@@ -510,12 +507,28 @@ static void use_gate(Game *g)
     }
 }
 
+/* A ladder's bottom within a jump above Titus: the original climbs on by jumping into it. */
+static bool ladder_above(const Game *g)
+{
+    const Player *p = &g->player;
+    int row = (p->y >> 4) - 2;      /* the ceiling over the body row, as collide() probes it */
+    for (int col = (p->x - 4) >> 4; col <= (p->x + 5) >> 4; col++)
+        for (int r = row; r >= row - 3 && r >= 0; r--)
+            if (level_ceiling(&g->level, col, r) == CEIL_LADDER)
+                return true;
+    return false;
+}
+
 static void play_frame(Game *g)
 {
+    /* The keyboard's Up jumps, as in 1991. On a gamepad only the jump buttons do (a worn stick
+     * or D-pad slips into up), unless pad_up_jumps; up there still climbs onto a ladder above. */
+    bool up = input_held(ACT_UP);
+    bool up_jumps = input_held_by_keyboard(ACT_UP) || (up && (tuning.pad_up_jumps || ladder_above(g)));
     const PlayerInput in = {
         .left = input_held(ACT_LEFT), .right = input_held(ACT_RIGHT),
-        .up = input_held(ACT_UP), .down = input_held(ACT_DOWN),
-        .jump = input_held(ACT_UP) || input_held(ACT_JUMP),     /* Up jumps, as in 1991 */
+        .up = up, .down = input_held(ACT_DOWN),
+        .jump = up_jumps || input_held(ACT_JUMP),
         .fire = input_held(ACT_ACTION),
     };
     Objects *o = &g->objects;
@@ -707,9 +720,6 @@ static void start_game(Game *g, int level)
 
 static void menu_frame(Game *g)
 {
-    int step = 0;                       /* on DIFFICULTY: left / right change it too */
-    if (g->menu.sel == MAIN_DIFFICULTY)
-        step = input_pressed(ACT_RIGHT) ? 1 : input_pressed(ACT_LEFT) ? -1 : 0;
     switch (menu_list_update(&g->menu)) {
     case MAIN_START:
         start_game(g, 0);
@@ -718,8 +728,9 @@ static void menu_frame(Game *g)
         g->mode = MODE_CODE;
         code_entry_start(&g->code);
         break;
-    case MAIN_DIFFICULTY:
-        step = 1;
+    case MAIN_OPTIONS:
+        g->mode = MODE_OPTIONS;
+        options_open(&g->options);
         break;
     case MAIN_QUIT:
         g->quit = true;
@@ -732,10 +743,15 @@ static void menu_frame(Game *g)
     default:
         break;
     }
-    if (step) {
-        tuning.difficulty = (Difficulty)((tuning.difficulty + step + DIFF_COUNT) % DIFF_COUNT);
-        name_difficulty();
-    }
+}
+
+static void options_frame(Game *g)
+{
+    int difficulty = tuning.difficulty;
+    bool done = options_update(&g->options, &difficulty);
+    tuning.difficulty = (Difficulty)difficulty;
+    if (done)
+        open_menu(g, MAIN_OPTIONS);
 }
 
 static void code_frame(Game *g)
@@ -839,6 +855,7 @@ void game_update(Game *g)
     case MODE_PAUSE: pause_frame(g); break;
     case MODE_NOTICE: notice_frame(g); break;
     case MODE_CREDITS: credits_frame(g); break;
+    case MODE_OPTIONS: options_frame(g); break;
     }
 }
 
@@ -1032,10 +1049,15 @@ static void render_level(Game *g, float alpha)
     }
 }
 
+/* Menu screens: a view taller than 200 px parts the wallpaper (up) and the items below its
+ * title (down), by up to MENU_GAP in all. */
+#define MENU_GAP 16
+static int menu_spread(void) { return SDL_clamp(video_view_h() - 200, 0, MENU_GAP) / 2; }
+
 void game_render(Game *g, float alpha)
 {
     SDL_Renderer *r = video_renderer();
-    int cx = video_view_w() / 2, oy = menu_origin_y();
+    int cx = video_view_w() / 2, oy = menu_origin_y(), spread = menu_spread();
     const MenuArt *a = &g->art;
     switch (g->mode) {
     case MODE_INTRO:
@@ -1050,12 +1072,16 @@ void game_render(Game *g, float alpha)
         break;
     }
     case MODE_MENU:
-        menu_draw_picture(r, a->wallpaper);
-        menu_list_draw(&g->menu, a, r, cx, oy + 146, g->frames);    /* 4 items down to y 200 */
+        menu_draw_picture_at(r, a->wallpaper, -spread);
+        menu_list_draw(&g->menu, a, r, cx, oy + 146 + spread, g->frames);  /* 4 items down to y 200 */
+        break;
+    case MODE_OPTIONS:
+        menu_draw_picture_at(r, a->wallpaper, -spread);
+        menu_dim(r, 170);
         break;
     case MODE_CODE:
-        menu_draw_picture(r, a->wallpaper);
-        code_entry_draw(&g->code, a, r, cx, oy + 152, g->frames);
+        menu_draw_picture_at(r, a->wallpaper, -spread);
+        code_entry_draw(&g->code, a, r, cx, oy + 152 + spread, g->frames);
         break;
     case MODE_CARD: {
         int n = g->card_resumes ? g->level.index : g->next_level;
@@ -1074,4 +1100,14 @@ void game_render(Game *g, float alpha)
         break;
     }
     video_set_fade((uint8_t)(g->fade * g->trans / 255));
+}
+
+void game_render_ui(Game *g)
+{
+    if (g->mode != MODE_OPTIONS)
+        return;
+    SDL_Color c = g->art.font.color;
+    if (c.a == 0)                       /* no font: the text palette's yellow */
+        c = (SDL_Color){255, 255, 85, 255};
+    options_draw(&g->options, tuning.difficulty, video_renderer(), c, (uint8_t)(g->fade * g->trans / 255));
 }

@@ -15,6 +15,7 @@
 #include "game/level.h"
 #include "game/menu.h"
 #include "game/objects.h"
+#include "game/options.h"
 #include "game/player.h"
 #include "platform/gfx.h"
 
@@ -26,11 +27,13 @@ typedef enum {
 } Difficulty;
 
 typedef struct {
-    Difficulty difficulty;      /* [player] difficulty, and the main menu */
+    Difficulty difficulty;      /* [player] difficulty, and the Options window */
     PlayerTuning player;
     CameraTuning camera;
     bool interpolate;           /* draw between game frames on fast displays */
     bool invincible;
+    bool pad_up_jumps;          /* [input]: gamepad up jumps like the keyboard's Up (1991); by
+                                 * default only under a ladder, to grab it */
     int start_lives;            /* -1 = original */
     bool restart_level;         /* after a death: the original's respawn at the last checkpoint
                                  * (false, default) or the whole level again from its start */
@@ -45,6 +48,7 @@ typedef enum {
     MODE_PAUSE,
     MODE_NOTICE,                /* black screen with a checkpoint or level code, then back */
     MODE_CREDITS,               /* after the ending: the developers' photo */
+    MODE_OPTIONS,               /* the Options window over the menu wallpaper */
 } GameMode;
 
 typedef enum {
@@ -79,6 +83,7 @@ typedef struct {
     MenuArt art;
     MenuList menu;
     CodeEntry code;
+    Options options;
     int intro_stage;            /* 0 logo, 1 title picture */
     int intro_frames;           /* also counts the credits */
     int next_level;             /* play index the card leads to */
@@ -116,5 +121,7 @@ void game_shutdown(Game *g);
 void game_update(Game *g);
 /* alpha: 0..1, how far the display is between the previous and the current game frame. */
 void game_render(Game *g, float alpha);
+/* Interface windows at the window's own resolution, after video_compose. */
+void game_render_ui(Game *g);
 
 #endif

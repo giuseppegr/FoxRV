@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "platform/gfx.h"
+#include "platform/icon_pixels.h"
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
@@ -89,21 +90,35 @@ static int auto_upscale(void)
     return 4;
 }
 
+/* The FoxRV icon for the title bar and taskbar; the 16 px art is a variant for small sizes. */
+static void set_icon(void)
+{
+    SDL_Surface *icon = SDL_CreateSurfaceFrom(32, 32, SDL_PIXELFORMAT_RGBA32, (void *)icon_32, 32 * 4);
+    SDL_Surface *small = SDL_CreateSurfaceFrom(16, 16, SDL_PIXELFORMAT_RGBA32, (void *)icon_16, 16 * 4);
+    if (icon && small)
+        SDL_AddSurfaceAlternateImage(icon, small);
+    if (!icon || !SDL_SetWindowIcon(window, icon))
+        SDL_Log("video: can't set the icon: %s", SDL_GetError());
+    SDL_DestroySurface(small);
+    SDL_DestroySurface(icon);
+}
+
 bool video_init(const Settings *s, const char *title)
 {
     cfg_aspect = s->aspect;
     cfg_min_view_h = s->min_view_height;
 
+    /* w x h is also the window's size when leaving fullscreen. */
     int h = s->min_view_height * s->scale;
     int w = (int)lroundf(h * (s->aspect > 0 ? s->aspect : 16.0f / 9.0f));
-    if (!SDL_CreateWindowAndRenderer(title, w, h, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | (s->fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+    if (!SDL_CreateWindowAndRenderer(title, w, h, flags, &window, &renderer)) {
         SDL_Log("video: %s", SDL_GetError());
         return false;
     }
+    set_icon();
     SDL_SetWindowMinimumSize(window, VIEW_MIN_W, VIEW_MIN_H);
     SDL_SetRenderVSync(renderer, s->vsync ? 1 : 0);
-    if (s->fullscreen)
-        SDL_SetWindowFullscreen(window, true);
     SDL_Log("video: renderer '%s', window %dx%d", SDL_GetRendererName(renderer), w, h);
 
     gfx_set_upscale(s->upscale > 0 ? s->upscale : auto_upscale());
@@ -142,13 +157,31 @@ void video_begin_frame(void)
     SDL_RenderClear(renderer);
 }
 
-void video_end_frame(void)
+void video_compose(void)
 {
     SDL_SetRenderTarget(renderer, NULL);
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     SDL_SetTextureColorMod(view, fade, fade, fade);
     SDL_RenderTexture(renderer, view, NULL, &dst);
+}
+
+void video_output_size(int *w, int *h)
+{
+    if (!SDL_GetCurrentRenderOutputSize(renderer, w, h))
+        *w = *h = 0;
+}
+
+int video_refresh_rate(void)
+{
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
+    return mode && mode->refresh_rate >= 1.0f ? (int)lroundf(mode->refresh_rate) : 60;
+}
+
+void video_present(void)
+{
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
     if (capture_path[0]) {
         SDL_Surface *shot = SDL_RenderReadPixels(renderer, NULL);
         if (!shot || !SDL_SaveBMP(shot, capture_path))

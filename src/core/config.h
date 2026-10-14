@@ -38,7 +38,14 @@ typedef bool (*ConfigHandler)(const char *section, const char *key, const char *
 
 void settings_defaults(Settings *s);
 
-/* Loads `path` over the current values. Returns false if the file couldn't be read. */
+/* Loads `path` over the current values. Returns false if the file couldn't be read. The
+ * file read becomes the one config_save_value writes to. */
 bool config_load(Settings *s, const char *path, ConfigHandler other);
+
+/* Where config_save_value writes when no file was loaded. */
+void config_set_save_path(const char *path);
+/* Writes one setting into the ini file, keeping everything else: the key's line gets the new
+ * value (its comment stays), or the key is added to its section, or the section to the end. */
+bool config_save_value(const char *section, const char *key, const char *value);
 
 #endif

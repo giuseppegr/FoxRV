@@ -1,0 +1,179 @@
+"""Draws the FOXRV icon: original pixel art made for this project (no third-party images).
+
+Writes:
+    res/foxrv.ico               Windows icon (16, 32, 64, 128, 256 px), embedded in the .exe
+    res/foxrv.png               256 px preview
+    res/foxrv_512.png           512 px, for the README
+    src/platform/icon_pixels.h  the 16 and 32 px art as RGBA, for SDL_SetWindowIcon
+
+The 32 px art is a fox head over "FoxRV"; the 16 px one is the head alone (text would be
+unreadable). Larger sizes are the 32 px art scaled by whole numbers, so they stay crisp.
+
+    python tools/make_icon.py
+"""
+import io
+import os
+import struct
+
+from PIL import Image
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PALETTE = {
+    ".": None,                      # background tile
+    "O": (232, 118, 28, 255),       # fur
+    "E": (110, 44, 14, 255),        # inner ear
+    "W": (255, 244, 224, 255),      # cheeks and muzzle
+    "K": (24, 20, 20, 255),         # eyes and nose
+    "T": (255, 255, 255, 255),      # text
+}
+TILE = (30, 42, 68, 255)            # rounded square behind everything
+TILE_EDGE = (16, 24, 40, 255)
+
+# Left halves; each row is mirrored to make the symmetric head.
+HEAD_32 = [
+    "O...........",
+    "OO..........",
+    "OEO.........",
+    "OEEO........",
+    "OEEEO.......",
+    "OEEEOOOOOOOO",
+    "OEEOOOOOOOOO",
+    "OOOOOOOOOOOO",
+    "OOOOOOOOOOOO",
+    "OOOOKKOOOOOO",
+    "WOOOOKKOOOOO",
+    "WWOOOOOOOOOO",
+    ".WWWOOOOOOOO",
+    "..WWWWOOOOOO",
+    "...WWWWWOOOO",
+    "....WWWWWWOO",
+    ".....WWWWWWW",
+    "......WWWKKK",
+    ".......WWWKK",
+    "..........WK",
+]
+
+HEAD_16 = [
+    "O......",
+    "OO.....",
+    "OEO....",
+    "OEEO...",
+    "OEEOOOO",
+    "OOOOOOO",
+    "OOKOOOO",
+    "WOOKOOO",
+    "WWOOOOO",
+    ".WWWOOO",
+    "..WWWWW",
+    "...WWWK",
+    ".....WK",
+]
+
+FONT = {
+    "F": ["####", "#...", "###.", "#...", "#..."],
+    "o": ["....", ".##.", "#..#", "#..#", ".##."],
+    "x": ["....", "#..#", ".##.", ".##.", "#..#"],
+    "R": ["###.", "#..#", "###.", "#.#.", "#..#"],
+    "V": ["#...#", "#...#", ".#.#.", ".#.#.", "..#.."],
+}
+
+
+def mirror(half):
+    return [row + row[::-1] for row in half]
+
+
+def tile(size):
+    """Rounded dark square with a 1 px darker rim."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    r = max(2, size // 8)
+    for y in range(size):
+        for x in range(size):
+            # distance into the nearest corner's rounding
+            cx = min(x, size - 1 - x)
+            cy = min(y, size - 1 - y)
+            if cx < r and cy < r and (r - cx - 0.5) ** 2 + (r - cy - 0.5) ** 2 > r * r:
+                continue
+            edge = cx == 0 or cy == 0 or (cx < r and cy < r and (r - cx + 0.5) ** 2 + (r - cy + 0.5) ** 2 > r * r)
+            img.putpixel((x, y), TILE_EDGE if edge else TILE)
+    return img
+
+
+def paint(img, rows, x0, y0, colours=PALETTE):
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            c = colours.get(ch)
+            if c:
+                img.putpixel((x0 + x, y0 + y), c)
+
+
+def text_rows(s):
+    glyphs = [FONT[c] for c in s]
+    return ["." .join(g[r] for g in glyphs).replace("#", "T") for r in range(5)]
+
+
+def art_32():
+    img = tile(32)
+    head = mirror(HEAD_32)
+    paint(img, head, (32 - len(head[0])) // 2, 2)
+    text = text_rows("FoxRV")
+    paint(img, text, (32 - len(text[0])) // 2, 2 + len(head) + 3)
+    return img
+
+
+def art_16():
+    img = tile(16)
+    head = mirror(HEAD_16)
+    paint(img, head, (16 - len(head[0])) // 2, (16 - len(head)) // 2)
+    return img
+
+
+def write_ico(path, images):
+    """ICO with every size stored as PNG (supported since Windows Vista)."""
+    blobs = []
+    for im in images:
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        blobs.append(buf.getvalue())
+    out = struct.pack("<HHH", 0, 1, len(images))
+    offset = 6 + 16 * len(images)
+    for im, blob in zip(images, blobs):
+        w, h = im.size
+        out += struct.pack("<BBBBHHII", w % 256, h % 256, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    with open(path, "wb") as f:
+        f.write(out + b"".join(blobs))
+
+
+def c_array(name, im):
+    w, h = im.size
+    px = [im.getpixel((x, y)) for y in range(h) for x in range(w)]
+    lines = []
+    for y in range(h):
+        row = px[y * w:(y + 1) * w]
+        lines.append("    " + " ".join("0x%02x,0x%02x,0x%02x,0x%02x," % p for p in row))
+    return "static const unsigned char %s[%d * %d * 4] = {\n%s\n};\n" % (name, w, h, "\n".join(lines))
+
+
+def main():
+    a16, a32 = art_16(), art_32()
+    big = [a32.resize((s, s), Image.NEAREST) for s in (64, 128, 256)]
+
+    os.makedirs(os.path.join(ROOT, "res"), exist_ok=True)
+    write_ico(os.path.join(ROOT, "res", "foxrv.ico"), [a16, a32] + big)
+    big[-1].save(os.path.join(ROOT, "res", "foxrv.png"))
+    a32.resize((512, 512), Image.NEAREST).save(os.path.join(ROOT, "res", "foxrv_512.png"))
+
+    header = (
+        "/* Generated by tools/make_icon.py; do not edit. The window icon as RGBA (byte order\n"
+        " * R, G, B, A): the fox head over \"FoxRV\", and the head alone for 16 px. */\n"
+        "#ifndef FOXRV_ICON_PIXELS_H\n#define FOXRV_ICON_PIXELS_H\n\n"
+        + c_array("icon_32", a32) + "\n" + c_array("icon_16", a16)
+        + "\n#endif\n"
+    )
+    with open(os.path.join(ROOT, "src", "platform", "icon_pixels.h"), "w", newline="\n") as f:
+        f.write(header)
+
+
+if __name__ == "__main__":
+    main()

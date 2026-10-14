@@ -82,12 +82,20 @@ static bool apply(Settings *s, const char *sec, const char *key, const char *val
     return true;
 }
 
+static char save_path[PATH_MAX_LEN];
+
+void config_set_save_path(const char *path)
+{
+    SDL_strlcpy(save_path, path, sizeof save_path);
+}
+
 bool config_load(Settings *s, const char *path, ConfigHandler other)
 {
     size_t size;
     char *text = SDL_LoadFile(path, &size);
     if (!text)
         return false;
+    config_set_save_path(path);
 
     char section[64] = "";
     int lineno = 0;
@@ -124,4 +132,145 @@ bool config_load(Settings *s, const char *path, ConfigHandler other)
     }
     SDL_free(text);
     return true;
+}
+
+/* --- saving ------------------------------------------------------------------------------- */
+
+typedef struct {
+    char *data;
+    size_t len, cap;
+    bool ok;
+} Buf;
+
+static void put(Buf *b, const char *s, size_t n)
+{
+    if (!b->ok)
+        return;
+    if (b->len + n + 1 > b->cap) {
+        size_t cap = (b->len + n + 1) * 2;
+        char *d = SDL_realloc(b->data, cap);
+        if (!d) {
+            b->ok = false;
+            return;
+        }
+        b->data = d;
+        b->cap = cap;
+    }
+    memcpy(b->data + b->len, s, n);
+    b->len += n;
+    b->data[b->len] = '\0';
+}
+
+static void puts_(Buf *b, const char *s) { put(b, s, strlen(s)); }
+
+/* "  key = value   ; comment" -> the same line with the new value; the comment keeps its
+ * column when the value fits. */
+static void put_replaced(Buf *b, const char *line, size_t len, const char *value)
+{
+    const char *eq = memchr(line, '=', len);
+    size_t head = (size_t)(eq - line) + 1;
+    put(b, line, head);
+    puts_(b, " ");
+    puts_(b, value);
+    const char *comment = NULL;
+    for (const char *p = eq + 1; p < line + len; p++) {
+        if (*p == ';' || *p == '#') {
+            comment = p;
+            break;
+        }
+    }
+    if (!comment)
+        return;
+    size_t used = head + 1 + strlen(value), column = (size_t)(comment - line);
+    for (size_t i = used; i < column; i++)
+        puts_(b, " ");
+    if (used >= column)
+        puts_(b, " ");
+    put(b, comment, (size_t)(line + len - comment));
+}
+
+/* Whether `line` (no newline) sets `key`; *section is updated by section headers. */
+static bool line_sets(const char *line, size_t len, char *section, size_t section_size, const char *key)
+{
+    char tmp[512];
+    SDL_strlcpy(tmp, line, SDL_min(len + 1, sizeof tmp));
+    char *p = trim(tmp);
+    if (*p == '[') {
+        char *end = strchr(p, ']');
+        if (end) {
+            *end = '\0';
+            SDL_strlcpy(section, trim(p + 1), section_size);
+        }
+        return false;
+    }
+    if (*p == ';' || *p == '#')
+        return false;
+    char *eq = strchr(p, '=');
+    if (!eq)
+        return false;
+    *eq = '\0';
+    return !SDL_strcasecmp(trim(p), key);
+}
+
+bool config_save_value(const char *section, const char *key, const char *value)
+{
+    if (!save_path[0])
+        return false;
+    size_t size = 0;
+    char *text = SDL_LoadFile(save_path, &size);   /* a missing file starts empty */
+    const char *src = text ? text : "";
+    const char *eol = strstr(src, "\r\n") ? "\r\n" : "\n";
+
+    Buf out = {.ok = true};
+    char cur[64] = "";
+    bool done = false;
+    size_t insert_len = 0;          /* output offset after the section's last non-blank line */
+    for (const char *line = src; *line;) {
+        const char *nl = strchr(line, '\n');
+        size_t len = nl ? (size_t)(nl - line) : strlen(line);
+        size_t text_len = len > 0 && line[len - 1] == '\r' ? len - 1 : len;
+        bool sets = line_sets(line, text_len, cur, sizeof cur, key);
+        bool in_section = !SDL_strcasecmp(cur, section);
+        if (!done && sets && in_section) {
+            put_replaced(&out, line, text_len, value);
+            put(&out, line + text_len, (nl ? len + 1 : len) - text_len);
+            done = true;
+        } else {
+            put(&out, line, nl ? len + 1 : len);
+            const char *t = line;
+            while (t < line + text_len && (*t == ' ' || *t == '\t'))
+                t++;
+            if (!done && in_section && t < line + text_len)
+                insert_len = out.len;
+        }
+        line = nl ? nl + 1 : line + len;
+    }
+
+    char added[512];
+    SDL_snprintf(added, sizeof added, "%s = %s%s", key, value, eol);
+    if (!done && insert_len > 0) {
+        /* the section exists: insert after its last non-blank line */
+        Buf merged = {.ok = true};
+        put(&merged, out.data, insert_len);
+        if (insert_len > 0 && out.data[insert_len - 1] != '\n')
+            puts_(&merged, eol);
+        puts_(&merged, added);
+        put(&merged, out.data + insert_len, out.len - insert_len);
+        SDL_free(out.data);
+        out = merged;
+    } else if (!done) {
+        if (out.len > 0 && out.data[out.len - 1] != '\n')
+            puts_(&out, eol);
+        char header[96];
+        SDL_snprintf(header, sizeof header, "%s[%s]%s", out.len > 0 ? eol : "", section, eol);
+        puts_(&out, header);
+        puts_(&out, added);
+    }
+    SDL_free(text);
+
+    bool ok = out.ok && SDL_SaveFile(save_path, out.data ? out.data : "", out.len);
+    if (!ok)
+        SDL_Log("config: can't save %s: %s", save_path, SDL_GetError());
+    SDL_free(out.data);
+    return ok;
 }

@@ -36,6 +36,8 @@ int menu_origin_y(void);
 
 /* A full-screen picture at 1:1 in the middle of the view. */
 void menu_draw_picture(SDL_Renderer *r, SDL_Texture *pic);
+/* The same, `dy` game pixels lower (negative: higher). */
+void menu_draw_picture_at(SDL_Renderer *r, SDL_Texture *pic, int dy);
 /* Darkens whatever is already drawn (pause menu over the game). */
 void menu_dim(SDL_Renderer *r, uint8_t alpha);
 

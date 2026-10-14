@@ -43,6 +43,19 @@ bool font_load(Font *f, SDL_Renderer *r)
         }
         SDL_Color pal[16];
         gfx_colours_from_vga6(pal, ds_ptr(DS_TEXT_PALETTE), 16);
+        /* The glyphs shade from pale yellow to brown: their colour is the most saturated. */
+        bool used[16] = {0};
+        for (int i = 0; i < sheet.w * sheet.h; i++)
+            used[sheet.px[i] & 15] = true;
+        int best = -1;
+        for (int c = 0; c < 16; c++) {
+            SDL_Color k = pal[c];
+            int chroma = SDL_max(k.r, SDL_max(k.g, k.b)) - SDL_min(k.r, SDL_min(k.g, k.b));
+            if (used[c] && chroma > best) {
+                best = chroma;
+                f->color = k;
+            }
+        }
         s = gfx_surface_from_indexed(sheet.px, sheet.w, sheet.h, pal);
         gfx_free_indexed(&sheet);
     }

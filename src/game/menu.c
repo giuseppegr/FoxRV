@@ -128,13 +128,18 @@ int menu_origin_y(void) { return (video_view_h() - SCREEN_H) / 2; }
 
 void menu_draw_picture(SDL_Renderer *r, SDL_Texture *pic)
 {
+    menu_draw_picture_at(r, pic, 0);
+}
+
+void menu_draw_picture_at(SDL_Renderer *r, SDL_Texture *pic, int dy)
+{
     if (!pic)
         return;
     float w, h;
     SDL_GetTextureSize(pic, &w, &h);
     w /= (float)gfx_upscale();
     h /= (float)gfx_upscale();
-    SDL_FRect d = {(float)((video_view_w() - (int)w) / 2), (float)((video_view_h() - (int)h) / 2), w, h};
+    SDL_FRect d = {(float)((video_view_w() - (int)w) / 2), (float)((video_view_h() - (int)h) / 2 + dy), w, h};
     SDL_RenderTexture(r, pic, NULL, &d);
 }
 
