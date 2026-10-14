@@ -1,7 +1,8 @@
 # Titus the Fox (DOS): technical overview
 
 What this copy of *Titus the Fox* (Titus, 1991–92) in `TTF/` contains, and how each data format works. Everything here was found by reading the files and disassembling the game's executable.
-The Python tools in `tools/` turn all of it into PNG, JSON and WAV files under `export/`.
+
+The engine (`src/`) reads the original files directly, from a `game/` folder next to the executable. It decodes them in memory and needs no exported data. The game's tables are read from FOX.COM's data segment at the offsets listed in `src/core/fox_ds.h`. The optional Python tools in `tools/` turn the same files into PNG, JSON and WAV files under `export/` for study (§9).
 
 **Confidence**: unmarked statements were checked against the data or the game code. Statements marked *(tentative)* are inferences that haven't been proven.
 
@@ -327,6 +328,8 @@ Looping songs are rendered for one loop; `--loops N` renders more.
 
 ## 9. Tools
 
+The engine doesn't use these: it decodes the game files itself (`src/core/sqz.c` for §2 and §3, `src/core/assets.c` to find them). The tools are kept for research: they export everything as viewable files.
+
 All tools live in `tools/` and read from `TTF/` by default.
 
 | Script | Output |
@@ -340,7 +343,7 @@ All tools live in `tools/` and read from `TTF/` by default.
 | `titus_audio.py` | Ports of the AdLib and PC-speaker drivers; DRO writer (library) |
 | `export_sound.py` | `export/sound/`: DRO and WAV files |
 | `export_entities.py` | `export/entities/`: `enemies.json`, `elevators.json`, `animations.json`, `sound_events.json` |
-| `export_driver_data.py` | `export/sound/adlib_ds.bin`: the 64 KB data segment, for the remake's AdLib driver (no numpy) |
+| `export_driver_data.py` | `export/sound/adlib_ds.bin`: the 64 KB data segment (the engine unpacks it from FOX.COM itself) |
 | `export_player.py` | `export/entities/player.json`: Titus's animation table, per-sprite hot spots and collision boxes, object property tables, enemy animation words and tables, new-game values, the ending scene (§11g) |
 
 Requirements:
