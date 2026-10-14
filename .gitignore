@@ -1,0 +1,18 @@
+# Build output
+build/
+build-debug/
+tools/build/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# DOSBox logs from running LEVCODES.COM
+tools/stdout.txt
+tools/stderr.txt
+
+# The original game and everything extracted from it (copyrighted data). Keep these
+# local: export/ is rebuilt from TTF/ by the scripts in tools/.
+TTF/
+TestTitus.7z
+export/

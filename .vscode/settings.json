@@ -1,0 +1,14 @@
+{
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build-debug/compile_commands.json",
+    "C_Cpp.default.cStandard": "c17",
+    "cmake.buildDirectory": "${workspaceFolder}/build-debug",
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "*.ini": "ini"
+    },
+    "search.exclude": {
+        "build/**": true,
+        "build-debug/**": true,
+        "third_party/**": true
+    }
+}

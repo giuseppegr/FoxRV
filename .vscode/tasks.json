@@ -1,0 +1,132 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "configure: debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",
+                ".",
+                "-B",
+                "build-debug",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build: debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build-debug",
+                "--target",
+                "foxrv",
+                "-j"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "configure: debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "autoDetect",
+                    "${workspaceFolder}"
+                ]
+            }
+        },
+        {
+            "label": "configure: release",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",
+                ".",
+                "-B",
+                "build",
+                "-DCMAKE_BUILD_TYPE=Release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build: release",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "foxrv",
+                "-j"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "configure: release",
+            "group": "build",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": [
+                    "autoDetect",
+                    "${workspaceFolder}"
+                ]
+            }
+        },
+        {
+            "label": "export: driver data",
+            "detail": "Writes export/sound/adlib_ds.bin from TTF/fox.com",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "tools/export_driver_data.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "test: selftest",
+            "detail": "Headless physics checks against the original's values",
+            "type": "shell",
+            "command": "${workspaceFolder}/build-debug/foxrv",
+            "args": [
+                "--selftest"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "build: debug",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "export: player data",
+            "detail": "Writes export/entities/player.json from TTF/fox.com",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "tools/export_player.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
