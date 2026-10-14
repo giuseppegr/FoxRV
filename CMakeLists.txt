@@ -28,15 +28,10 @@ FetchContent_MakeAvailable(SDL3)
 # --- Vendored single-file libraries (third_party/, licenses kept alongside) ----------------
 add_library(thirdparty STATIC
     third_party/nuked-opl3/opl3.c
-    third_party/lodepng/lodepng.c
-    third_party/cjson/cJSON.c
 )
 target_include_directories(thirdparty SYSTEM PUBLIC
     third_party/nuked-opl3
-    third_party/lodepng
-    third_party/cjson
 )
-target_compile_definitions(thirdparty PUBLIC LODEPNG_NO_COMPILE_ENCODER LODEPNG_NO_COMPILE_CPP)
 # Always optimised, also in Debug builds: the OPL emulator is the hot path for audio.
 target_compile_options(thirdparty PRIVATE -O2)
 
@@ -45,6 +40,7 @@ add_executable(foxrv
     src/main.c
     src/core/config.c
     src/core/assets.c
+    src/core/sqz.c
     src/platform/video.c
     src/platform/gfx.c
     src/platform/font.c
@@ -72,3 +68,13 @@ target_compile_options(foxrv PRIVATE -Wall -Wextra -Wshadow -Wno-unused-paramete
 add_custom_command(TARGET foxrv POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/engine.ini $<TARGET_FILE_DIR:foxrv>/engine.ini)
+
+# The original game's files (FOX.COM and the .SQZ files) go in game/ next to the binary.
+# They are not part of this repository; for development, point FOXRV_GAME_SOURCE at a copy
+# and every build puts it there.
+set(FOXRV_GAME_SOURCE "${CMAKE_SOURCE_DIR}/TTF" CACHE PATH "Folder with the original game's files, copied next to the binary")
+if(EXISTS "${FOXRV_GAME_SOURCE}/fox.com" OR EXISTS "${FOXRV_GAME_SOURCE}/FOX.COM")
+    add_custom_command(TARGET foxrv POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${FOXRV_GAME_SOURCE} $<TARGET_FILE_DIR:foxrv>/game)
+endif()

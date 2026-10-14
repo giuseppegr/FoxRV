@@ -1,10 +1,10 @@
 #include "platform/gfx.h"
 
-#include <stdlib.h>
 #include <string.h>
 
 #include "core/assets.h"
-#include "lodepng.h"
+#include "core/fox_ds.h"
+#include "core/sqz.h"
 
 #define ATLAS_W 1024
 #define ATLAS_PAD 1
@@ -111,7 +111,7 @@ static bool upscale_indexed(IndexedImage *img, int cw, int ch, bool transparent_
         wide[i] = img->px[i];
     uint32_t *big = scale_image(wide, img->w, img->h, cw, ch, !transparent_edges, 0);
     SDL_free(wide);
-    uint8_t *px = big ? malloc(n * upscale * upscale) : NULL;   /* freed with free() */
+    uint8_t *px = big ? SDL_malloc(n * upscale * upscale) : NULL;
     if (!px) {
         SDL_free(big);
         return false;
@@ -119,7 +119,7 @@ static bool upscale_indexed(IndexedImage *img, int cw, int ch, bool transparent_
     for (size_t i = 0; i < n * upscale * upscale; i++)
         px[i] = (uint8_t)big[i];
     SDL_free(big);
-    free(img->px);
+    SDL_free(img->px);
     img->px = px;
     img->w *= upscale;
     img->h *= upscale;
@@ -145,57 +145,37 @@ static SDL_Surface *upscale_surface(SDL_Surface *s, int cw, int ch)
 
 /* --- images ------------------------------------------------------------------------------ */
 
-bool gfx_load_indexed(const char *rel, IndexedImage *out)
+bool gfx_alloc_indexed(IndexedImage *img, int w, int h)
 {
-    size_t size;
-    unsigned char *file = assets_load(rel, &size);
-    if (!file)
-        return false;
-
-    /* color_convert = 0 keeps the raw palette indices instead of expanding to RGBA. */
-    LodePNGState st;
-    lodepng_state_init(&st);
-    st.decoder.color_convert = 0;
-    unsigned char *px = NULL;
-    unsigned w, h;
-    unsigned err = lodepng_decode(&px, &w, &h, &st, file, size);
-    bool indexed8 = st.info_png.color.colortype == LCT_PALETTE && st.info_png.color.bitdepth == 8;
-    lodepng_state_cleanup(&st);
-    SDL_free(file);
-
-    if (err || !indexed8) {
-        SDL_Log("gfx: %s: %s", rel, err ? lodepng_error_text(err) : "not an 8-bit indexed PNG");
-        free(px);
-        return false;
-    }
-    for (size_t i = 0; i < (size_t)w * h; i++)
-        px[i] &= 0x0F;
-    out->w = (int)w;
-    out->h = (int)h;
-    out->px = px;
-    return true;
+    img->px = SDL_calloc((size_t)w * h, 1);
+    img->w = img->px ? w : 0;
+    img->h = img->px ? h : 0;
+    return img->px != NULL;
 }
 
 void gfx_free_indexed(IndexedImage *img)
 {
-    free(img->px);      /* allocated by lodepng (malloc) or atlas_load (calloc) */
+    SDL_free(img->px);
     memset(img, 0, sizeof *img);
 }
 
-bool palette_from_vga6(Palette *pal, const cJSON *rgb_list)
+void palette_from_vga6(Palette *pal, const uint8_t *rgb)
 {
-    if (cJSON_GetArraySize(rgb_list) != 16)
-        return false;
     for (int i = 0; i < 16; i++) {
-        const cJSON *rgb = cJSON_GetArrayItem(rgb_list, i);
         uint8_t v[3];
         for (int k = 0; k < 3; k++) {
-            int c = cJSON_GetArrayItem(rgb, k) ? cJSON_GetArrayItem(rgb, k)->valueint & 0x3F : 0;
+            int c = rgb[i * 3 + k] & 0x3F;
             v[k] = (uint8_t)(c << 2 | c >> 4);     /* 6-bit DAC value to 8 bits */
         }
         pal->c[i] = (SDL_Color){v[0], v[1], v[2], 255};
     }
-    return true;
+}
+
+void gfx_colours_from_vga6(SDL_Color *out, const uint8_t *rgb, int n)
+{
+    for (int i = 0; i < n; i++)
+        out[i] = (SDL_Color){(uint8_t)((rgb[i * 3] & 0x3F) * 255 / 63), (uint8_t)((rgb[i * 3 + 1] & 0x3F) * 255 / 63),
+                             (uint8_t)((rgb[i * 3 + 2] & 0x3F) * 255 / 63), 255};
 }
 
 SDL_Texture *gfx_bake(SDL_Renderer *r, const IndexedImage *img, const Palette *pal, bool transparent0)
@@ -220,28 +200,18 @@ SDL_Texture *gfx_bake(SDL_Renderer *r, const IndexedImage *img, const Palette *p
     return tex;
 }
 
-SDL_Surface *gfx_load_surface(const char *rel)
+SDL_Surface *gfx_surface_from_indexed(const uint8_t *px, int w, int h, const SDL_Color *pal)
 {
-    size_t size;
-    unsigned char *file = assets_load(rel, &size);
-    if (!file)
-        return NULL;
-    unsigned char *px = NULL;
-    unsigned w, h;
-    unsigned err = lodepng_decode32(&px, &w, &h, file, size);
-    SDL_free(file);
-    if (err) {
-        SDL_Log("gfx: %s: %s", rel, lodepng_error_text(err));
+    SDL_Surface *s = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGBA32);
+    if (!s) {
+        SDL_Log("gfx: can't create a %dx%d surface: %s", w, h, SDL_GetError());
         return NULL;
     }
-    SDL_Surface *s = SDL_CreateSurface((int)w, (int)h, SDL_PIXELFORMAT_RGBA32);
-    if (s) {
-        for (unsigned y = 0; y < h; y++)
-            memcpy((uint8_t *)s->pixels + (size_t)y * s->pitch, px + (size_t)y * w * 4, (size_t)w * 4);
-    } else {
-        SDL_Log("gfx: %s: %s", rel, SDL_GetError());
+    for (int y = 0; y < h; y++) {
+        SDL_Color *row = (SDL_Color *)((uint8_t *)s->pixels + (size_t)y * s->pitch);
+        for (int x = 0; x < w; x++)
+            row[x] = pal[px[(size_t)y * w + x]];
     }
-    free(px);
     return s;
 }
 
@@ -275,13 +245,14 @@ SDL_Texture *gfx_texture_cells(SDL_Renderer *r, SDL_Surface *s, int cell_w, int 
 
 /* --- tileset ---------------------------------------------------------------------------- */
 
-bool tileset_load(Tileset *ts, const char *rel)
+bool tileset_load(Tileset *ts, const IndexedImage *sheet)
 {
     memset(ts, 0, sizeof *ts);
-    if (!gfx_load_indexed(rel, &ts->img))
+    if (!gfx_alloc_indexed(&ts->img, sheet->w, sheet->h))
         return false;
+    memcpy(ts->img.px, sheet->px, (size_t)sheet->w * sheet->h);
     if (!upscale_indexed(&ts->img, TILE_SIZE, TILE_SIZE, false)) {    /* each tile on its own */
-        SDL_Log("gfx: %s: can't upscale", rel);
+        SDL_Log("gfx: can't upscale the tileset");
         gfx_free_indexed(&ts->img);
         return false;
     }
@@ -311,26 +282,31 @@ void tileset_free(Tileset *ts)
 
 /* --- sprite atlas ----------------------------------------------------------------------- */
 
+/* SPREXP.SQZ: the sprites one after another without headers, each 4 planes of w*h/8 bytes,
+ * with the sizes from the table at DS:6665. */
 bool atlas_load(SpriteAtlas *a)
 {
     memset(a, 0, sizeof *a);
-    cJSON *json = assets_load_json("sprites/sprites.json");
-    if (!json)
-        return false;
-    const cJSON *list = cJSON_GetObjectItemCaseSensitive(json, "sprites");
-    a->count = cJSON_GetArraySize(list);
+    while (ds_u16(DS_SPRITE_SIZES + 2 * a->count))
+        a->count++;
+    size_t size, offset = 0;
+    uint8_t *data = assets_load_sqz("sprexp.sqz", &size);
     a->rect = SDL_calloc((size_t)SDL_max(a->count, 1), sizeof *a->rect);
     IndexedImage *imgs = SDL_calloc((size_t)SDL_max(a->count, 1), sizeof *imgs);
-    bool ok = a->rect && imgs;
+    bool ok = data && a->rect && imgs;
 
     /* Shelf packing in file order: sprites of one animation are similar in size. */
     int x = 0, y = 0, shelf_h = 0;
     for (int i = 0; ok && i < a->count; i++) {
-        const cJSON *spr = cJSON_GetArrayItem(list, i);
-        const cJSON *file = cJSON_GetObjectItemCaseSensitive(spr, "file");
-        char rel[256];
-        SDL_snprintf(rel, sizeof rel, "sprites/%s", cJSON_IsString(file) ? file->valuestring : "?");
-        if (!gfx_load_indexed(rel, &imgs[i]) || !upscale_indexed(&imgs[i], 0, 0, true)) {
+        int w = (int)ds_u8(DS_SPRITE_SIZES + 2 * i), h = (int)ds_u8(DS_SPRITE_SIZES + 2 * i + 1);
+        size_t bytes = (size_t)w * h / 2;
+        if (offset + bytes > size || !gfx_alloc_indexed(&imgs[i], w, h)) {
+            ok = false;
+            break;
+        }
+        planar_to_indexed(data + offset, w, h, imgs[i].px);
+        offset += bytes;
+        if (!upscale_indexed(&imgs[i], 0, 0, true)) {
             ok = false;
             break;
         }
@@ -343,13 +319,13 @@ bool atlas_load(SpriteAtlas *a)
         x += imgs[i].w + ATLAS_PAD;
         shelf_h = SDL_max(shelf_h, imgs[i].h);
     }
-
-    if (ok) {
-        a->img.w = ATLAS_W * upscale;
-        a->img.h = y + shelf_h;
-        a->img.px = calloc((size_t)a->img.w * a->img.h, 1);
-        ok = a->img.px != NULL;
+    if (ok && offset != size) {
+        SDL_Log("gfx: the sprite table covers %zu bytes, SPREXP.SQZ has %zu (unsupported game version)", offset, size);
+        ok = false;
     }
+
+    if (ok)
+        ok = gfx_alloc_indexed(&a->img, ATLAS_W * upscale, y + shelf_h);
     for (int i = 0; ok && i < a->count; i++) {
         const SDL_Rect *rc = &a->rect[i];
         for (int row = 0; row < rc->h; row++)
@@ -359,7 +335,7 @@ bool atlas_load(SpriteAtlas *a)
     for (int i = 0; imgs && i < a->count; i++)
         gfx_free_indexed(&imgs[i]);
     SDL_free(imgs);
-    cJSON_Delete(json);
+    SDL_free(data);
     if (!ok) {
         atlas_free(a);
         return false;

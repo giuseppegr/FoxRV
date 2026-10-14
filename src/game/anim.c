@@ -3,7 +3,17 @@
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 
-#include "core/assets.h"
+#include "core/fox_ds.h"
+
+#define ENEMY_SPRITE_BASE 0x65      /* enemy sprite = key + 0x65 (image 0x673D) */
+#define EVENT_FRAME 0x2000
+#define ENEMY_KEYS (0x163 - 0x65 + 1)
+#define ENEMY_TYPES 19
+/* New-game values, immediates at image 0x2D7, and the caps at 0x5BAA / 0x5BBB. */
+#define START_LIVES 2
+#define START_ENERGY 16
+#define MAX_LIVES 9
+#define MAX_ENERGY 16
 
 typedef struct {
     int count;
@@ -18,126 +28,122 @@ static int nwords;
 static int states[PLAYER_STATE_COUNT];
 static SpriteInfo *sprites;
 static int nsprites;
-static PlayerStart start;
+static const PlayerStart start = {START_LIVES, START_ENERGY, MAX_LIVES, MAX_ENERGY};
 static int *ewords;
 static int newords;
 static uint8_t eclass[256], eboss[256];
 static int ecarry[7], edeath[6];
-static bool econtact[19];
+static bool econtact[ENEMY_TYPES];
 
-static void read_ints(const cJSON *list, int *out, int n)
-{
-    for (int i = 0; i < n; i++) {
-        const cJSON *v = cJSON_GetArrayItem(list, i);
-        out[i] = cJSON_IsNumber(v) ? v->valueint : 0;
-    }
-}
-
+/* The enemy word table split into sequences, each ending with a jump word (a negative word
+ * jumps back that many bytes, possibly into another sequence). */
 static bool load_sequences(void)
 {
-    cJSON *json = assets_load_json("entities/animations.json");
-    if (!json)
-        return false;
-    const cJSON *list = cJSON_GetObjectItemCaseSensitive(json, "sequences");
-    nseqs = cJSON_GetArraySize(list);
+    nseqs = 0;
+    for (int i = 0; i < newords; i++)
+        if (ewords[i] < 0 || i == newords - 1)
+            nseqs++;
     seqs = SDL_calloc((size_t)SDL_max(nseqs, 1), sizeof *seqs);
-    for (int i = 0; seqs && i < nseqs; i++) {
-        const cJSON *s = cJSON_GetArrayItem(list, i);
-        const cJSON *frames = cJSON_GetObjectItemCaseSensitive(s, "frames");
-        const cJSON *then = cJSON_GetObjectItemCaseSensitive(s, "then_goes_to");
-        Sequence *q = &seqs[i];
-        q->count = cJSON_GetArraySize(frames);
-        q->sprite = SDL_calloc((size_t)SDL_max(q->count, 1), sizeof *q->sprite);
-        for (int f = 0; q->sprite && f < q->count; f++) {
-            const cJSON *fr = cJSON_GetArrayItem(frames, f);
-            q->sprite[f] = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(fr, "remove"))
-                               ? ANIM_REMOVE : json_int(fr, "sprite", ANIM_REMOVE);
+    /* Word index -> (sequence, position in it), to resolve the jumps. */
+    int *word_seq = SDL_calloc((size_t)SDL_max(newords, 1), sizeof *word_seq);
+    int *word_pos = SDL_calloc((size_t)SDL_max(newords, 1), sizeof *word_pos);
+    int *seq_last = SDL_calloc((size_t)SDL_max(nseqs, 1), sizeof *seq_last);
+    bool ok = seqs && word_seq && word_pos && seq_last;
+    for (int i = 0, q = 0, first = 0; ok && i < newords; i++) {
+        word_seq[i] = q;
+        word_pos[i] = i - first;
+        if (ewords[i] >= 0 && i < newords - 1)
+            continue;
+        Sequence *sq = &seqs[q];
+        sq->sprite = SDL_calloc((size_t)(i - first + 1), sizeof *sq->sprite);
+        ok = sq->sprite != NULL;
+        for (int k = first; ok && k <= i; k++) {
+            int v = ewords[k];
+            if (v == ENEMY_REMOVE_WORD)
+                sq->sprite[sq->count++] = ANIM_REMOVE;
+            else if (v >= 0)
+                sq->sprite[sq->count++] = (v & ~EVENT_FRAME) + ENEMY_SPRITE_BASE;
         }
-        q->next_seq = json_int(then, "sequence", i);
-        q->next_frame = json_int(then, "frame", 0);
+        sq->next_seq = q;
+        sq->next_frame = 0;
+        seq_last[q++] = i;
+        first = i + 1;
     }
-    cJSON_Delete(json);
-    return seqs != NULL;
+    for (int q = 0; ok && q < nseqs; q++) {
+        int jump = ewords[seq_last[q]];
+        int target = seq_last[q] + jump / 2;
+        if (jump < 0 && !(jump & 1) && target >= 0) {
+            seqs[q].next_seq = word_seq[target];
+            seqs[q].next_frame = word_pos[target];
+        }
+    }
+    SDL_free(seq_last);
+    SDL_free(word_seq);
+    SDL_free(word_pos);
+    return ok;
 }
 
 static bool load_player(void)
 {
-    cJSON *json = assets_load_json("entities/player.json");
-    if (!json) {
-        SDL_Log("anim: run tools/export_player.py");
-        return false;
+    /* Titus's words: from the first state's to the end of the furthest sequence. */
+    unsigned ptr[PLAYER_STATE_COUNT], base = 0xFFFF, end = 0;
+    for (int i = 0; i < PLAYER_STATE_COUNT; i++) {
+        ptr[i] = ds_u16(DS_PLAYER_STATES + 2 * i);
+        if (ptr[i])
+            base = SDL_min(base, ptr[i]);
     }
-    const cJSON *w = cJSON_GetObjectItemCaseSensitive(json, "words");
-    nwords = cJSON_GetArraySize(w);
+    for (int i = 0; i < PLAYER_STATE_COUNT; i++) {
+        unsigned p = ptr[i];
+        while (p && p < 0xFFFE && ds_s16(p) >= 0)
+            p += 2;
+        if (p)
+            end = SDL_max(end, p + 2);
+    }
+    nwords = end > base ? (int)(end - base) / 2 : 0;
     words = SDL_calloc((size_t)SDL_max(nwords, 1), sizeof *words);
     for (int i = 0; words && i < nwords; i++)
-        words[i] = cJSON_GetArrayItem(w, i)->valueint;
+        words[i] = ds_s16(base + 2 * i);
+    for (int i = 0; i < PLAYER_STATE_COUNT; i++)
+        states[i] = ptr[i] && (int)(ptr[i] - base) / 2 < nwords ? (int)(ptr[i] - base) / 2 : -1;
 
-    const cJSON *st = cJSON_GetObjectItemCaseSensitive(json, "states");
-    for (int i = 0; i < PLAYER_STATE_COUNT; i++) {
-        const cJSON *v = cJSON_GetArrayItem(st, i);
-        states[i] = cJSON_IsNumber(v) && v->valueint < nwords ? v->valueint : -1;
-    }
-
-    const cJSON *hot = cJSON_GetObjectItemCaseSensitive(json, "sprite_hot");
-    const cJSON *box = cJSON_GetObjectItemCaseSensitive(json, "sprite_box");
-    nsprites = SDL_min(cJSON_GetArraySize(hot), cJSON_GetArraySize(box));
+    nsprites = 0;
+    while (ds_u16(DS_SPRITE_SIZES + 2 * nsprites))
+        nsprites++;
     sprites = SDL_calloc((size_t)SDL_max(nsprites, 1), sizeof *sprites);
     for (int i = 0; sprites && i < nsprites; i++) {
-        const cJSON *h = cJSON_GetArrayItem(hot, i), *b = cJSON_GetArrayItem(box, i);
         sprites[i] = (SpriteInfo){
-            .hot_x = cJSON_GetArrayItem(h, 0)->valueint, .hot_y = cJSON_GetArrayItem(h, 1)->valueint,
-            .box_w = cJSON_GetArrayItem(b, 0)->valueint, .box_h = cJSON_GetArrayItem(b, 1)->valueint,
+            .hot_x = ds_s8(DS_SPRITE_HOT + 2 * i), .hot_y = ds_s8(DS_SPRITE_HOT + 2 * i + 1),
+            .box_w = (int)ds_u8(DS_SPRITE_BOX + 2 * i), .box_h = (int)ds_u8(DS_SPRITE_BOX + 2 * i + 1),
+            .w = (int)ds_u8(DS_SPRITE_SIZES + 2 * i), .h = (int)ds_u8(DS_SPRITE_SIZES + 2 * i + 1),
+            .obj_flags = i < OBJECT_SPRITES ? (int)ds_u8(DS_OBJECT_FLAGS + i) : 0,
+            .fall_limit = i < OBJECT_SPRITES ? (int)ds_u8(DS_OBJECT_FALL_LIMIT + i) : 15,
         };
     }
-    const cJSON *of = cJSON_GetObjectItemCaseSensitive(json, "object_flags");
-    const cJSON *fl = cJSON_GetObjectItemCaseSensitive(json, "object_fall_limit");
-    for (int i = 0; sprites && i < nsprites; i++) {
-        const cJSON *f = cJSON_GetArrayItem(of, i), *l = cJSON_GetArrayItem(fl, i);
-        sprites[i].obj_flags = i < OBJECT_SPRITES && cJSON_IsNumber(f) ? f->valueint : 0;
-        sprites[i].fall_limit = i < OBJECT_SPRITES && cJSON_IsNumber(l) ? l->valueint : 15;
-    }
-    const cJSON *ew = cJSON_GetObjectItemCaseSensitive(json, "enemy_words");
-    newords = cJSON_GetArraySize(ew);
-    ewords = SDL_calloc((size_t)SDL_max(newords, 1), sizeof *ewords);
-    if (ewords)
-        read_ints(ew, ewords, newords);
-    int tmp[256];
-    read_ints(cJSON_GetObjectItemCaseSensitive(json, "enemy_class"), tmp, 256);
-    for (int i = 0; i < 256; i++)
-        eclass[i] = (uint8_t)tmp[i];
-    read_ints(cJSON_GetObjectItemCaseSensitive(json, "enemy_boss"), tmp, 256);
-    for (int i = 0; i < 256; i++)
-        eboss[i] = (uint8_t)tmp[i];
-    read_ints(cJSON_GetObjectItemCaseSensitive(json, "enemy_carry_keys"), ecarry, 7);
-    read_ints(cJSON_GetObjectItemCaseSensitive(json, "enemy_death_keys"), edeath, 6);
-    const cJSON *ec = cJSON_GetObjectItemCaseSensitive(json, "enemy_contact");
-    for (int i = 0; i < 19; i++)
-        econtact[i] = cJSON_IsTrue(cJSON_GetArrayItem(ec, i));
-    start = (PlayerStart){
-        json_int(json, "start_lives", 2), json_int(json, "start_energy", 16),
-        json_int(json, "max_lives", 9), json_int(json, "max_energy", 16),
-    };
-    cJSON_Delete(json);
 
-    /* Image sizes, for placing mirrored sprites. */
-    cJSON *meta = assets_load_json("sprites/sprites.json");
-    const cJSON *s;
-    int i = 0;
-    cJSON_ArrayForEach(s, cJSON_GetObjectItemCaseSensitive(meta, "sprites")) {
-        if (sprites && i < nsprites) {
-            sprites[i].w = json_int(s, "width", 0);
-            sprites[i].h = json_int(s, "height", 0);
-        }
-        i++;
-    }
-    cJSON_Delete(meta);
+    newords = (DS_ENEMY_WORDS_END - DS_ENEMY_WORDS) / 2;
+    ewords = SDL_calloc((size_t)newords, sizeof *ewords);
+    for (int i = 0; ewords && i < newords; i++)
+        ewords[i] = ds_s16(DS_ENEMY_WORDS + 2 * i);
+    SDL_memset(eclass, 0, sizeof eclass);
+    SDL_memset(eboss, 0, sizeof eboss);
+    for (int i = 0; i < ENEMY_KEYS; i++)
+        eclass[i] = (uint8_t)ds_u8(DS_ENEMY_CLASS + i);
+    /* Image 0x26C9: keys first..first+count-1 of each pair are bosses. */
+    for (unsigned a = DS_BOSS_LIST; a < 0xFFFC && ds_u16(a) != 0xFFFF; a += 4)
+        for (unsigned key = ds_u16(a); key < ds_u16(a) + ds_u16(a + 2) && key < ENEMY_KEYS; key++)
+            eboss[key] = 1;
+    for (int i = 0; i < 7; i++)
+        ecarry[i] = (int)ds_u16(DS_ENEMY_CARRY_KEYS + 2 * i);
+    for (int i = 0; i < 6; i++)
+        edeath[i] = (int)ds_u16(DS_ENEMY_DEATH_KEYS + 2 * i);
+    for (int i = 0; i < ENEMY_TYPES; i++)
+        econtact[i] = ds_u16(DS_ENEMY_HANDLERS + 2 * i) != ENEMY_NO_CONTACT;
     return words && sprites && ewords;
 }
 
 bool anim_load(void)
 {
-    if (load_sequences() && load_player())
+    if (load_player() && load_sequences())
         return true;
     anim_free();
     return false;
@@ -255,7 +261,7 @@ int enemy_class(int key) { return key >= 0 && key < 256 ? eclass[key] : 0xFF; }
 int enemy_carry_key(int cls) { return ecarry[(cls & 0x0F) % 7]; }
 int enemy_death_key(int cls) { return edeath[((cls >> 4) & 0x0F) % 6]; }
 bool enemy_is_boss(int key) { return key >= 0 && key < 256 && eboss[key] != 0; }
-bool enemy_type_contact(int type) { return type >= 0 && type < 19 && econtact[type]; }
+bool enemy_type_contact(int type) { return type >= 0 && type < ENEMY_TYPES && econtact[type]; }
 
 bool sprite_boxes_touch(int ax, int ay, int asprite, int bx, int by, int bsprite)
 {

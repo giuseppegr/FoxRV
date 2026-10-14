@@ -1,7 +1,7 @@
 /* Front-end screens, drawn with the original art and font:
  *
- *  - the TITUS logo, the title picture and the credits photo (titus/titre/levela.png);
- *  - the menu wallpaper (menu.png). Its START / PASSWORD lines are part of the picture, so
+ *  - the TITUS logo, the title picture and the credits photo (TITUS/TITRE/LEVELA.SQZ);
+ *  - the menu wallpaper (MENU.SQZ). Its START / PASSWORD lines are part of the picture, so
  *    they are erased and the items are drawn live in the game font, with the picture's own
  *    diamond as the cursor;
  *  - list menus (main menu, pause), level-code entry and the between-levels card.
@@ -53,8 +53,7 @@ int menu_list_update(MenuList *m);
 void menu_list_draw(const MenuList *m, const MenuArt *a, SDL_Renderer *r, int center_x, int y, unsigned frame);
 
 /* Level codes. The original computes them from the PC's BIOS, so the remake uses the codes
- * of the DOSBox setup they were taken from (export/levcodes/codes_dosbox.txt). */
-bool level_codes_load(void);
+ * of the DOSBox setup they were taken from. */
 const char *level_code(int index);              /* play index -> "E1AB", or NULL */
 
 typedef struct {

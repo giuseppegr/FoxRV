@@ -32,14 +32,9 @@ static void opl_print(void *user, uint8_t reg, uint8_t val)
 
 static int dump_opl(int song, int ticks)
 {
-    size_t size;
-    uint8_t *ds = assets_load("sound/adlib_ds.bin", &size);
-    if (!ds)
-        return 1;
     static AdlibDriver d;
     int tick = 0;
-    adlib_init(&d, ds, size, opl_print, &tick);
-    SDL_free(ds);
+    adlib_init(&d, assets_data_segment(), ASSETS_DS_SIZE, opl_print, &tick);
     adlib_play(&d, song);
     while (tick < ticks) {
         tick++;
@@ -96,8 +91,12 @@ int main(int argc, char **argv)
 {
     Settings cfg;
     load_settings(&cfg);
-    if (!assets_init(cfg.export_dir))
+    bool headless = argc >= 2 && (!strcmp(argv[1], "--selftest") || !strcmp(argv[1], "--dump-opl"));
+    if (!assets_init(cfg.game_dir)) {
+        if (!headless)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Titus the Fox", assets_error(), NULL);
         return 1;
+    }
 
     if (argc >= 3 && !strcmp(argv[1], "--dump-opl"))
         return dump_opl(atoi(argv[2]), argc >= 4 ? atoi(argv[3]) : 2000);
@@ -129,7 +128,7 @@ int main(int argc, char **argv)
     bool ok = video_init(&cfg, "Titus the Fox");
     if (ok) {
         input_init();
-        audio_init(&cfg, "sound/adlib_ds.bin");     /* silent if it fails */
+        audio_init(&cfg);           /* silent if it fails */
         ok = game_init(&game, start_level);
     }
 

@@ -215,14 +215,10 @@ static void SDLCALL feed(void *user, SDL_AudioStream *s, int additional, int tot
 
 /* --- public API ----------------------------------------------------------------------------- */
 
-bool audio_init(const Settings *s, const char *ds_rel)
+bool audio_init(const Settings *s)
 {
-    size_t size;
-    uint8_t *ds = assets_load(ds_rel, &size);
-    if (!ds) {
-        SDL_Log("audio: run tools/export_driver_data.py to create %s", ds_rel);
-        return false;
-    }
+    const uint8_t *ds = assets_data_segment();
+    size_t size = ASSETS_DS_SIZE;
     Uint64 t0 = SDL_GetTicks();
     bool ok = build_sfx_cache(ds, size, s->tick_hz);
 
@@ -231,7 +227,6 @@ bool audio_init(const Settings *s, const char *ds_rel)
     ring = SDL_malloc((size_t)ring_cap * sizeof *ring);
     music_lock = SDL_CreateMutex();
     ok = ok && music_synth && ring && music_lock && synth_init(music_synth, ds, size, s->tick_hz);
-    SDL_free(ds);
     if (!ok) {
         SDL_Log("audio: initialisation failed");
         audio_shutdown();

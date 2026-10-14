@@ -22,7 +22,7 @@ void settings_defaults(Settings *s)
     s->music_buffer_ms = 2000;
     s->tick_hz = PIT_HZ / 0x4000;
     s->logic_hz = PIT_HZ / 0x4000 / 2;    /* the original: one game frame every 2 ticks */
-    SDL_strlcpy(s->export_dir, "export", sizeof s->export_dir);
+    SDL_strlcpy(s->game_dir, "game", sizeof s->game_dir);
 }
 
 static char *trim(char *p)
@@ -74,7 +74,7 @@ static bool apply(Settings *s, const char *sec, const char *key, const char *val
         else return false;
     } else if (!SDL_strcasecmp(sec, "engine")) {
         if (!SDL_strcasecmp(key, "logic_hz")) s->logic_hz = SDL_clamp(atof(val), 10.0, 500.0);
-        else if (!SDL_strcasecmp(key, "export_dir")) SDL_strlcpy(s->export_dir, val, sizeof s->export_dir);
+        else if (!SDL_strcasecmp(key, "game_dir")) SDL_strlcpy(s->game_dir, val, sizeof s->game_dir);
         else return false;
     } else {
         return false;

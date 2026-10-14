@@ -220,9 +220,7 @@ static bool enter_level(Game *g, int index)
     level_free(&g->level);
     g->level = next;
     g->level_loaded = true;
-    char rel[64];
-    SDL_snprintf(rel, sizeof rel, "levels/%s_tiles.png", level_info(index)->file);
-    if (tileset_load(&g->tiles, rel))
+    if (tileset_load(&g->tiles, &g->level.tileset))
         tileset_bake(&g->tiles, video_renderer(), &g->level.pal);
     atlas_bake(&g->atlas, video_renderer(), &g->level.pal);   /* sprites use colour 14 too */
 

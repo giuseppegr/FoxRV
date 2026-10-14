@@ -1,8 +1,7 @@
 /* The game's AdLib music and sound-effect driver, ported from tools/titus_audio.py
  * (AdlibDriver), which was itself ported from the unpacked FOX.COM.
  *
- * Like the original, it runs on a private copy of the 64 KB data segment (written by
- * tools/export_driver_data.py), so all song tables, instrument patches and quirks behave
+ * Like the original, it runs on a private copy of FOX.COM's 64 KB data segment, so all song tables, instrument patches and quirks behave
  * exactly as in the game. Register writes go to a callback, normally an OPL emulator.
  *
  * Drive it at the PIT rate (72.82 Hz): call adlib_music_tick and adlib_sfx_tick once per tick.

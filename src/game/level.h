@@ -1,5 +1,5 @@
-/* A level's map and the data the game logic needs, loaded from export/levels and
- * export/entities. No rendering state: the tileset texture lives with the renderer.
+/* A level's map and the data the game logic needs, decoded from its LEVELx.SQZ file and the
+ * tables in FOX.COM. No rendering state: the tileset texture lives with the renderer.
  */
 #ifndef FOXRV_LEVEL_H
 #define FOXRV_LEVEL_H
@@ -66,6 +66,7 @@ typedef struct {
     char title[64];
     int rows;
     uint8_t *map;               /* rows x MAP_COLS tiles, bonus tiles applied */
+    IndexedImage tileset;       /* the 256 tiles, 16 per row */
     uint8_t wall[256], floor[256], ceiling[256];
     uint8_t shown[3][256];      /* tile displayed in each phase of the tile animation */
     Palette pal;
@@ -83,7 +84,7 @@ typedef struct {
     int ngates;
 } Level;
 
-/* Level list in play order (from enemies.json and sound_events.json). */
+/* Level list in play order (from the tables in FOX.COM). */
 bool level_list_load(void);
 int level_count(void);
 const LevelInfo *level_info(int index);

@@ -1,9 +1,9 @@
 #include "game/menu.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #include "core/assets.h"
+#include "core/sqz.h"
 #include "platform/gfx.h"
 #include "platform/input.h"
 #include "platform/video.h"
@@ -15,20 +15,63 @@
 #define REPEAT_FIRST 12         /* frames before a held direction repeats, then every */
 #define REPEAT_NEXT 4
 #define WRONG_FRAMES 54
-#define MAX_LEVEL_CODES 32
+#define VGA_PICTURE_SIZE (768 + SCREEN_W * SCREEN_H + 1536)   /* 6-bit palette + pixels + unused */
+#define EGA_PICTURE_SIZE (SCREEN_W * SCREEN_H / 2)            /* 4 planes */
 
-/* menu.png: the baked-in START / PASSWORD lines (erased), and the cursor diamond (kept). */
+/* The standard EGA colours, for the EGA pictures (LEVELA.SQZ). */
+static const uint8_t ega_rgb[16][3] = {
+    {0x00, 0x00, 0x00}, {0x00, 0x00, 0xAA}, {0x00, 0xAA, 0x00}, {0x00, 0xAA, 0xAA},
+    {0xAA, 0x00, 0x00}, {0xAA, 0x00, 0xAA}, {0xAA, 0x55, 0x00}, {0xAA, 0xAA, 0xAA},
+    {0x55, 0x55, 0x55}, {0x55, 0x55, 0xFF}, {0x55, 0xFF, 0x55}, {0x55, 0xFF, 0xFF},
+    {0xFF, 0x55, 0x55}, {0xFF, 0x55, 0xFF}, {0xFF, 0xFF, 0x55}, {0xFF, 0xFF, 0xFF},
+};
+
+/* Level codes. The original computes them from the PC's BIOS ROM and CPU (image 0x6782), so
+ * they differ between machines; these are the ones of the DOSBox setup they were taken from
+ * (CPU class 3, BIOS date 01/01/92), by play number. Levels 2 and 5 share a code. */
+static const char *const codes[] = {
+    "E1AB", "0D5F", "C357", "86AF", "0D5F", "1ABE", "357C", "6AF8",
+    "D5F0", "ABE1", "57C3", "5F0D", "BE1A", "F86A", "E1AB",
+};
+#define NCODES ((int)SDL_arraysize(codes))
+
+/* menu.sqz: the baked-in START / PASSWORD lines (erased), and the cursor diamond (kept). */
 static const SDL_Rect baked_items = {0, 145, 320, 55};     /* all black below the subtitle */
 static const SDL_Rect cursor_rect = {120, 160, 6, 7};
 
-static char codes[MAX_LEVEL_CODES][CODE_LEN + 1];
-static int ncodes;
-
 /* --- art ---------------------------------------------------------------------------------- */
 
-static SDL_Texture *picture(SDL_Renderer *r, const char *rel)
+/* A 320 x 200 full-screen picture, VGA (256 colours with its own palette) or EGA. */
+static SDL_Surface *picture_surface(const char *name)
 {
-    SDL_Surface *s = gfx_load_surface(rel);
+    size_t size;
+    uint8_t *data = assets_load_sqz(name, &size);
+    if (!data)
+        return NULL;
+    SDL_Surface *s = NULL;
+    SDL_Color pal[256];
+    if (size == VGA_PICTURE_SIZE) {
+        gfx_colours_from_vga6(pal, data, 256);
+        s = gfx_surface_from_indexed(data + 768, SCREEN_W, SCREEN_H, pal);
+    } else if (size == EGA_PICTURE_SIZE) {
+        uint8_t *px = SDL_malloc(SCREEN_W * SCREEN_H);
+        for (int i = 0; i < 16; i++)
+            pal[i] = (SDL_Color){ega_rgb[i][0], ega_rgb[i][1], ega_rgb[i][2], 255};
+        if (px) {
+            planar_to_indexed(data, SCREEN_W, SCREEN_H, px);
+            s = gfx_surface_from_indexed(px, SCREEN_W, SCREEN_H, pal);
+        }
+        SDL_free(px);
+    } else {
+        SDL_Log("menu: %s is not a 320x200 picture", name);
+    }
+    SDL_free(data);
+    return s;
+}
+
+static SDL_Texture *picture(SDL_Renderer *r, const char *name)
+{
+    SDL_Surface *s = picture_surface(name);
     SDL_Texture *t = gfx_texture(r, s);
     SDL_DestroySurface(s);
     return t;
@@ -38,11 +81,11 @@ bool menu_art_load(MenuArt *a, SDL_Renderer *r)
 {
     memset(a, 0, sizeof *a);
     bool ok = font_load(&a->font, r);
-    a->logo = picture(r, "images/titus.png");
-    a->title = picture(r, "images/titre.png");
-    a->credits = picture(r, "images/levela.png");
+    a->logo = picture(r, "titus.sqz");
+    a->title = picture(r, "titre.sqz");
+    a->credits = picture(r, "levela.sqz");     /* the developers' photo, EGA */
 
-    SDL_Surface *menu = gfx_load_surface("images/menu.png");
+    SDL_Surface *menu = picture_surface("menu.sqz");
     if (menu) {
         SDL_Surface *cur = SDL_CreateSurface(cursor_rect.w, cursor_rect.h, SDL_PIXELFORMAT_RGBA32);
         if (cur) {
@@ -65,8 +108,7 @@ bool menu_art_load(MenuArt *a, SDL_Renderer *r)
     }
     ok = ok && a->logo && a->title && a->wallpaper && a->cursor;
     if (!ok)
-        SDL_Log("menu: some pictures are missing (run tools/export_images.py and export_font.py)");
-    level_codes_load();
+        SDL_Log("menu: some pictures or the font couldn't be loaded");
     return ok;
 }
 
@@ -165,38 +207,14 @@ void menu_list_draw(const MenuList *m, const MenuArt *a, SDL_Renderer *r, int ce
 
 /* --- level codes -------------------------------------------------------------------------- */
 
-bool level_codes_load(void)
-{
-    ncodes = 0;
-    size_t size;
-    char *text = assets_load("levcodes/codes_dosbox.txt", &size);
-    if (!text)
-        return false;
-    for (char *line = text; line && *line;) {
-        char *next = strchr(line, '\n');
-        if (next)
-            *next++ = '\0';
-        int level;
-        char code[8];
-        if (sscanf(line, "%d %7s", &level, code) == 2 && strlen(code) == CODE_LEN && level >= 1 &&
-            level <= MAX_LEVEL_CODES) {
-            SDL_strlcpy(codes[level - 1], code, sizeof codes[0]);
-            ncodes = SDL_max(ncodes, level);
-        }
-        line = next;
-    }
-    SDL_free(text);
-    return ncodes > 0;
-}
-
 const char *level_code(int index)
 {
-    return index >= 0 && index < ncodes && codes[index][0] ? codes[index] : NULL;
+    return index >= 0 && index < NCODES ? codes[index] : NULL;
 }
 
 static int level_for_code(const char *code)
 {
-    for (int i = 0; i < ncodes; i++)
+    for (int i = 0; i < NCODES; i++)
         if (!SDL_strcasecmp(codes[i], code))
             return i;
     return -1;

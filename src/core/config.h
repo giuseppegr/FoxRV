@@ -30,7 +30,7 @@ typedef struct {
 
     /* [engine] */
     double logic_hz;        /* fixed game-logic rate; 36.41 = original, other values = game speed */
-    char export_dir[PATH_MAX_LEN];
+    char game_dir[PATH_MAX_LEN];    /* the original game's files, next to the executable */
 } Settings;
 
 /* Called for keys in sections Settings doesn't own. Return false to report an unknown key. */

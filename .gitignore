@@ -12,7 +12,9 @@ tools/stdout.txt
 tools/stderr.txt
 
 # The original game and everything extracted from it (copyrighted data). Keep these
-# local: export/ is rebuilt from TTF/ by the scripts in tools/.
+# local: the engine reads game/ (next to the executable); export/ is written from TTF/ by
+# the optional scripts in tools/.
 TTF/
+game/
 TestTitus.7z
 export/

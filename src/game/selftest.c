@@ -163,7 +163,7 @@ int selftest_run(void)
     PlayerTuning t;
     player_tuning_defaults(&t);
     if (!level_list_load() || !anim_load()) {
-        printf("FAIL  could not load the exported data\n");
+        printf("FAIL  could not load the game data\n");
         return 1;
     }
     Level lv;

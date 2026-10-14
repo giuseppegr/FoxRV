@@ -1,10 +1,10 @@
-/* Animation tables and sprite placement data from export/entities/.
+/* Animation tables and sprite placement data, read from FOX.COM's data segment (fox_ds.h).
  *
- *  - Enemy sequences (animations.json): each entry is one game frame; a sequence ends by
- *    jumping to a frame of the same or another sequence.
- *  - Player animation words (player.json): the original word area, stepped exactly like the
+ *  - Enemy sequences (the word table at DS:87D5): each entry is one game frame; a sequence
+ *    ends by jumping to a frame of the same or another sequence.
+ *  - Player animation words (DS:6527): the original word area, stepped exactly like the
  *    game does it (a word >= 0 is a sprite for one frame, < 0 jumps back that many bytes).
- *  - Sprite placement (player.json): hot spot and collision box of every sprite.
+ *  - Sprite placement: hot spot and collision box of every sprite.
  */
 #ifndef FOXRV_ANIM_H
 #define FOXRV_ANIM_H

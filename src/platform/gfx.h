@@ -16,8 +16,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "cJSON.h"
-
 #define TILE_SIZE 16
 
 typedef struct {
@@ -33,18 +31,20 @@ typedef struct {
 void gfx_set_upscale(int factor);
 int gfx_upscale(void);
 
-bool gfx_load_indexed(const char *rel, IndexedImage *out);   /* path inside export/ */
+bool gfx_alloc_indexed(IndexedImage *img, int w, int h);    /* all colour 0 */
 void gfx_free_indexed(IndexedImage *img);
 
-/* From a JSON array of 16 [r, g, b] triples with 6-bit VGA components. */
-bool palette_from_vga6(Palette *pal, const cJSON *rgb_list);
+/* From 16 RGB triples with 6-bit VGA components (as stored in the game). */
+void palette_from_vga6(Palette *pal, const uint8_t *rgb);
+/* `n` 6-bit VGA colours to 8 bits (c * 255 / 63), for pictures and text. */
+void gfx_colours_from_vga6(SDL_Color *out, const uint8_t *rgb, int n);
 
 /* RGBA texture of `img` through `pal`; index 0 becomes transparent when asked. */
 SDL_Texture *gfx_bake(SDL_Renderer *r, const IndexedImage *img, const Palette *pal, bool transparent0);
 
-/* Any PNG inside export/ in true colour (e.g. the 256-colour full-screen pictures), as an
- * RGBA32 surface to edit before making a texture. NULL with an error logged. */
-SDL_Surface *gfx_load_surface(const char *rel);
+/* A w x h picture of palette indices in true colour (e.g. the 256-colour full-screen
+ * pictures), as an RGBA32 surface to edit before making a texture. NULL with an error logged. */
+SDL_Surface *gfx_surface_from_indexed(const uint8_t *px, int w, int h, const SDL_Color *pal);
 /* Texture from a surface, upscaled, nearest-neighbour sampled, alpha-blended. */
 SDL_Texture *gfx_texture(SDL_Renderer *r, SDL_Surface *s);
 /* The same for a sheet of cell_w x cell_h pictures (e.g. glyphs), each upscaled on its own. */
@@ -56,7 +56,7 @@ typedef struct {
     SDL_Texture *tex;
 } Tileset;
 
-bool tileset_load(Tileset *ts, const char *rel);
+bool tileset_load(Tileset *ts, const IndexedImage *sheet);   /* copies the sheet */
 void tileset_bake(Tileset *ts, SDL_Renderer *r, const Palette *pal);
 void tileset_draw(const Tileset *ts, SDL_Renderer *r, int tile, float x, float y);
 void tileset_free(Tileset *ts);
@@ -69,7 +69,7 @@ typedef struct {
     SDL_Texture *tex;
 } SpriteAtlas;
 
-bool atlas_load(SpriteAtlas *a);             /* sprites/sprites.json + sprite_NNN.png */
+bool atlas_load(SpriteAtlas *a);             /* SPREXP.SQZ, sizes from FOX.COM */
 void atlas_bake(SpriteAtlas *a, SDL_Renderer *r, const Palette *pal);
 /* Draws sprite `n` with its top-left corner at (x, y). */
 void atlas_draw(const SpriteAtlas *a, SDL_Renderer *r, int n, float x, float y, bool flip);

@@ -1,7 +1,7 @@
-/* The game's own font (fonts.sqz, exported to export/font/): 41 glyphs of 8 x 12 pixels,
+/* The game's own font (FONTS.SQZ): 41 glyphs of 8 x 12 pixels,
  * "0-9 ! ? . $ _ A-Z", no lowercase.
  *
- * Drawn the original way (image 0x756): each glyph opaque on its black cell (the PNG uses
+ * Drawn the original way (image 0x756): each glyph opaque on its black cell (coloured with
  * the game's text palette, DS:04C4: yellow on black), a space as a black cell. Lowercase
  * letters are shown as capitals; characters the font lacks as spaces.
  */
@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 typedef struct {
-    SDL_Texture *tex;           /* font_sheet.png: the glyphs side by side */
+    SDL_Texture *tex;           /* the glyphs side by side */
     int w, h;                   /* glyph size */
     int8_t glyph[128];          /* ASCII -> glyph index, -1 = none */
 } Font;

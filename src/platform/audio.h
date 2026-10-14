@@ -20,9 +20,9 @@
 
 #define SFX_VOICES 4
 
-/* `ds_rel` is the driver's data segment inside export/. Without an audio device it returns
+/* The driver runs on FOX.COM's data segment (assets.h). Without an audio device it returns
  * false and the game runs silent. */
-bool audio_init(const Settings *s, const char *ds_rel);
+bool audio_init(const Settings *s);
 void audio_shutdown(void);
 
 void audio_play_song(int song);
