@@ -32,6 +32,8 @@ static MusicCmd music_cmd;
 static int music_cmd_song;
 static bool music_ended;            /* the song's data ended (it doesn't loop) ... */
 static int music_end_left;          /* ... and this many buffered frames are still to play */
+static bool music_played;           /* the same for its first time through */
+static int music_played_left;
 
 static SDL_Thread *music_thread;
 static SDL_AtomicInt music_quit;
@@ -112,7 +114,7 @@ static int SDLCALL music_main(void *unused)
         if (music_cmd == MUSIC_NONE) {      /* else it belongs to a song that was replaced */
             if (flush) {
                 ring_read = ring_count = 0;
-                music_ended = false;
+                music_ended = music_played = false;
                 flush = false;
             }
             int w = (ring_read + ring_count) % ring_cap;
@@ -123,6 +125,10 @@ static int SDLCALL music_main(void *unused)
             if (!music_ended && !adlib_music_active(&music_synth->drv)) {
                 music_ended = true;
                 music_end_left = ring_count;
+            }
+            if (!music_played && adlib_music_played(&music_synth->drv)) {
+                music_played = true;
+                music_played_left = ring_count;
             }
         }
         SDL_UnlockMutex(music_lock);
@@ -141,6 +147,7 @@ static int take(int16_t *out, int frames)
     ring_read = (ring_read + n) % ring_cap;
     ring_count -= n;
     music_end_left = SDL_max(music_end_left - n, 0);
+    music_played_left = SDL_max(music_played_left - n, 0);
     SDL_UnlockMutex(music_lock);
     if (n < frames)
         underruns++;
@@ -165,8 +172,8 @@ static void shutdown(void)
     SDL_free(music_synth);
     music_synth = NULL;
     music_cmd = MUSIC_NONE;
-    music_ended = false;
-    ring_read = ring_count = music_end_left = 0;
+    music_ended = music_played = false;
+    ring_read = ring_count = music_end_left = music_played_left = 0;
     underruns = 0;
 }
 
@@ -195,7 +202,7 @@ static void command(MusicCmd cmd, int song)
     SDL_LockMutex(music_lock);
     music_cmd = cmd;
     music_cmd_song = song;
-    music_ended = false;
+    music_ended = music_played = false;
     SDL_UnlockMutex(music_lock);
 }
 
@@ -207,4 +214,12 @@ static bool finished(void)
     return done;
 }
 
-const MusicSource music_opl = {"AdLib", SYNTH_RATE, init, shutdown, build_sfx, command, take, finished};
+static bool played(void)
+{
+    SDL_LockMutex(music_lock);
+    bool done = music_played && music_played_left == 0;
+    SDL_UnlockMutex(music_lock);
+    return done;
+}
+
+const MusicSource music_opl = {"AdLib", SYNTH_RATE, init, shutdown, build_sfx, command, take, finished, played};

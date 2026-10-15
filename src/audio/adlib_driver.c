@@ -110,6 +110,7 @@ void adlib_play(AdlibDriver *d, int song)  /* 0x1357 / 0x1469 */
     if (song < 0 || song >= ADLIB_SONG_COUNT)
         return;
     reset(d);
+    memset(d->loops, 0, sizeof d->loops);
     unsigned chans = nth_list(d, SONG_LISTS, song);
     unsigned instr = nth_list(d, INSTR_LISTS, song);
     unsigned p = instr;
@@ -274,9 +275,13 @@ static unsigned run_channel(AdlibDriver *d, unsigned di, unsigned si)
             case 0x3:                       /* return */
                 si = rw(d, di + CH_RET);
                 break;
-            case 0x4:                       /* jump */
-                si = rw(d, si);
+            case 0x4: {                     /* jump; back = the song repeats */
+                unsigned target = rw(d, si), ch = (di - CHANNELS) / CH_SIZE;
+                if (target < si && ch < ADLIB_MAX_CHANNELS && d->loops[ch] < 255)
+                    d->loops[ch]++;
+                si = target;
                 break;
+            }
             case 0xF:                       /* end */
                 wb(d, ACTIVE, rb(d, ACTIVE) - 1);
                 return PTR_DONE;
@@ -320,6 +325,17 @@ void adlib_music_tick(AdlibDriver *d)     /* 0x14AB */
             ww(d, di + CH_PTR, si);
         }
     }
+}
+
+bool adlib_music_played(const AdlibDriver *d)
+{
+    if (!d->music_on)
+        return true;
+    unsigned ch = 0;
+    for (unsigned di = CHANNELS; rw(d, di + CH_PTR) != PTR_END; di += CH_SIZE, ch++)
+        if (rw(d, di + CH_PTR) != PTR_DONE && ch < ADLIB_MAX_CHANNELS && !d->loops[ch])
+            return false;
+    return true;
 }
 
 bool adlib_music_active(const AdlibDriver *d)

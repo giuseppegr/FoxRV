@@ -142,6 +142,7 @@ void audio_shutdown(void)
 }
 
 AudioDevice audio_device(void) { return settings.audio_device; }
+bool audio_active(void) { return stream != NULL; }
 
 bool audio_set_device(AudioDevice d)
 {
@@ -171,6 +172,16 @@ bool audio_music_finished(void)
         return false;
     SDL_LockAudioStream(stream);
     bool done = source->finished();
+    SDL_UnlockAudioStream(stream);
+    return done;
+}
+
+bool audio_music_played(void)
+{
+    if (!stream)
+        return false;
+    SDL_LockAudioStream(stream);
+    bool done = source->played();
     SDL_UnlockAudioStream(stream);
     return done;
 }

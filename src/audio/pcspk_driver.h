@@ -22,6 +22,7 @@ typedef struct {
     uint16_t divisor;           /* PIT channel 2 divisor; 0 = 65536, as on the PIT */
     bool gate;                  /* port 61h bits 0-1: the speaker sounds */
     unsigned writes;            /* divisor writes so far (--dump-pcspk) */
+    unsigned loops;             /* jumps back taken: the song has been played through */
 } PcspkDriver;
 
 bool pcspk_init(PcspkDriver *d, const uint8_t *ds, size_t len);
@@ -35,5 +36,7 @@ void pcspk_tick(PcspkDriver *d);
 
 /* True while the song still has data (songs that don't loop end). */
 bool pcspk_active(const PcspkDriver *d);
+/* True once the song has ended or jumped back to repeat: it has been played through once. */
+bool pcspk_played(const PcspkDriver *d);
 
 #endif

@@ -56,5 +56,6 @@ static int take(int16_t *out, int frames)
 }
 
 static bool finished(void) { return !pcspk_active(&speaker->drv); }
+static bool played(void) { return pcspk_played(&speaker->drv); }
 
-const MusicSource music_speaker = {"PC speaker", SPEAKER_RATE, init, shutdown, build_sfx, command, take, finished};
+const MusicSource music_speaker = {"PC speaker", SPEAKER_RATE, init, shutdown, build_sfx, command, take, finished, played};

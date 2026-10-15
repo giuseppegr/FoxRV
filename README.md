@@ -68,7 +68,7 @@ build/FoxRV --debug      print the engine's log (with any of the above)
 
 The game prints nothing unless `--debug` is given. On Windows it is a GUI program with no console window; `--debug`, `--selftest`, `--dump-opl` and `--dump-pcspk` print to the terminal they were started from, or open a console if there is none. PowerShell doesn't wait for GUI programs, so to wait for the result and get the exit code, pipe the output: `build/FoxRV --selftest | Out-Host`.
 
-Settings live in `engine.ini`: video, audio, controls, camera, difficulty and the original's physics constants. Every key is optional. `view_size = 320x200` in `[video]` shows exactly the original screen, scaled up and centred, instead of a view that grows with the window.
+Settings live in `engine.ini`: video, audio, controls, camera, difficulty and the original's physics constants. Every key is optional. `view_size = 320x200` in `[video]` shows exactly the original screen, scaled up and centred, instead of a view that grows with the window. `fit` scales the view by whole numbers (`integer`, the sharpest), as large as fits (`aspect`) or over the whole window (`stretch`); it's also *Screen* in Options.
 
 `device` in `[audio]` picks the sound: `adlib` (the default) or `speaker`, the PC speaker's square-wave music. The original played no effects on the speaker; FoxRV adds short beeps, which silence the music while they play, as on a one-voice speaker.
 
@@ -76,11 +76,11 @@ The frame rate follows the display (`vsync = 1`). Where the driver ignores vsync
 
 Gamepads (Xbox layout) by default: the D-pad or left stick moves and climbs, A jumps, B picks up and throws, Start pauses, Back opens the menu. Unlike the keyboard's Up, which jumps as in 1991, up on a pad doesn't jump (a worn stick or D-pad would trigger it by mistake), except to grab a ladder above; `pad_up_jumps = 1` in `[input]` makes it jump too. For worn controllers that slip into up, `pad_up_threshold` (how far the stick must be pushed up, 75% by default) and `pad_up_delay` (how long up must be held, 3 game frames, about 80 ms) can be raised, also in Options.
 
-**Options** on the main menu sets the difficulty and the sound device, and maps a controller: *Map controller* asks for each action in turn (press a button, or push a stick or trigger; Esc, or holding Back for a second, cancels), and *Reset controller* restores the default layout. Both are saved to `engine.ini`. The keyboard layout is fixed there and only shown. `fullscreen = 1` in `[video]` starts in full screen; F11 or Alt+Enter switch at any time.
+**Options** on the main menu sets the difficulty, the sound device and the screen scaling, and maps a controller: *Map controller* asks for each action in turn (press a button, or push a stick or trigger; Esc, or holding Back for a second, cancels), and *Reset controller* restores the default layout. Both are saved to `engine.ini`. The keyboard layout is fixed there and only shown. `fullscreen = 1` in `[video]` starts in full screen; F11 or Alt+Enter switch at any time.
 
 ## Nintendo 3DS
 
-The 3DS build plays the original 320x200 screen, centred on the top screen, with PC speaker sound (the AdLib emulator is too slow for the 3DS). The bottom screen stays black.
+The 3DS build plays the original 320x200 screen on the top screen, scaled to 384x240 (Options > *Screen*: *Stretch* fills all 400x240, *Whole pixels* keeps 320x200), with PC speaker sound (the AdLib emulator is too slow for the 3DS). The bottom screen stays black.
 
 **Building** needs [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the 3DS tools (on Windows, its installer with *3DS Development*). Its toolchain only runs from devkitPro's MSYS2 shell, so:
 

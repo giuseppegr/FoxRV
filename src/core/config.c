@@ -16,6 +16,13 @@ void settings_defaults(Settings *s)
     s->aspect = 0.0f;
     s->min_view_height = 240;
     s->upscale = 0;
+#ifdef __3DS__
+    /* The original screen, as large as the top screen allows (also for settings files made
+     * before these keys existed). */
+    s->view_w = 320;
+    s->view_h = 200;
+    s->fit = FIT_ASPECT;
+#endif
     s->audio_device = FOXRV_WITH_OPL ? AUDIO_ADLIB : AUDIO_SPEAKER;
     s->master_volume = 80;
     s->music_volume = 100;
@@ -55,6 +62,18 @@ static float parse_aspect(const char *v)
     return (float)atof(v);
 }
 
+static const char *const fit_names[FIT_COUNT] = {"integer", "aspect", "stretch"};
+
+const char *config_fit_name(ViewFit f) { return fit_names[f]; }
+
+ViewFit config_fit_from_name(const char *name)
+{
+    for (int f = 0; f < FIT_COUNT; f++)
+        if (!SDL_strcasecmp(name, fit_names[f]))
+            return (ViewFit)f;
+    return FIT_INTEGER;
+}
+
 /* "320x200", or "auto" (0 x 0). */
 static void parse_size(const char *v, int *w, int *h)
 {
@@ -77,6 +96,7 @@ static bool apply(Settings *s, const char *sec, const char *key, const char *val
         else if (!SDL_strcasecmp(key, "aspect")) s->aspect = parse_aspect(val);
         else if (!SDL_strcasecmp(key, "min_view_height")) s->min_view_height = SDL_clamp(atoi(val), 200, 1080);
         else if (!SDL_strcasecmp(key, "view_size")) parse_size(val, &s->view_w, &s->view_h);
+        else if (!SDL_strcasecmp(key, "fit")) s->fit = config_fit_from_name(val);
         else if (!SDL_strcasecmp(key, "upscale")) s->upscale = !SDL_strcasecmp(val, "auto") ? 0 : SDL_clamp(atoi(val), 1, 4);
         else return false;
     } else if (!SDL_strcasecmp(sec, "audio")) {

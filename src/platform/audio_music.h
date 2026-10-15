@@ -25,6 +25,7 @@ typedef struct {
     void (*command)(MusicCmd cmd, int song);
     int (*take)(int16_t *out, int frames);              /* returns the frames there were */
     bool (*finished)(void);
+    bool (*played)(void);                               /* ended, or heard all through once */
 } MusicSource;
 
 #if FOXRV_WITH_OPL

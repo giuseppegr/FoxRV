@@ -16,6 +16,7 @@
 #define ADLIB_SONG_COUNT 16
 #define ADLIB_SFX_COUNT 14
 #define ADLIB_DS_SIZE 0x10000
+#define ADLIB_MAX_CHANNELS 16
 
 typedef void (*OplWriteFn)(void *user, uint8_t reg, uint8_t val);
 
@@ -24,6 +25,7 @@ typedef struct {
     OplWriteFn write;
     void *user;
     bool music_on;
+    uint8_t loops[ADLIB_MAX_CHANNELS];  /* per channel record: jumps back taken (whole song played) */
 } AdlibDriver;
 
 /* Copies the data segment and runs the original init (image 0x1398) and reset. */
@@ -38,6 +40,10 @@ void adlib_sfx_tick(AdlibDriver *d);
 
 /* True while at least one music channel still has data (songs that don't loop end). */
 bool adlib_music_active(const AdlibDriver *d);
+
+/* True once every channel still playing has jumped back to repeat (or none plays): the song
+ * has been played through once. As tools/titus_audio.py's run_adlib_song. */
+bool adlib_music_played(const AdlibDriver *d);
 
 /* True while a sound effect is playing. */
 bool adlib_sfx_active(const AdlibDriver *d);

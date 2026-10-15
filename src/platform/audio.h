@@ -29,6 +29,9 @@ void audio_stop_music(void);
 /* True once a song that doesn't loop (a jingle) has been heard to the end. Never true
  * without an audio device, so callers waiting for it also need a time limit. */
 bool audio_music_finished(void);
+/* True once the song has ended or, if it repeats, been heard all through once. Never true
+ * without an audio device either. */
+bool audio_music_played(void);
 /* Holds all output (pause menu); music resumes where it stopped. */
 void audio_pause(bool paused);
 void audio_play_sfx(int n);
@@ -36,6 +39,8 @@ void audio_play_sfx(int n);
 /* The device in use (or that failed to open). Switching restarts the last song from its
  * start; false if the new device couldn't open (the game then runs silent). */
 AudioDevice audio_device(void);
+/* False when there's no sound (no device, or it failed to open). */
+bool audio_active(void);
 bool audio_set_device(AudioDevice d);
 
 /* 0..100 each. */

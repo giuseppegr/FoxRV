@@ -65,6 +65,7 @@ void pcspk_play(PcspkDriver *d, int song)  /* 0x12FF, speaker path */
     ww(d, PTR, rw(d, SONGS + (unsigned)song * 2));
     wb(d, LEFT, 0);
     wb(d, ACTIVE, 1);
+    d->loops = 0;
     d->gate = true;             /* the previous divisor sounds until the first note */
 }
 
@@ -78,6 +79,11 @@ void pcspk_stop(PcspkDriver *d)
 bool pcspk_active(const PcspkDriver *d)
 {
     return rw(d, PTR) < PTR_DONE;
+}
+
+bool pcspk_played(const PcspkDriver *d)
+{
+    return !pcspk_active(d) || d->loops > 0;
 }
 
 static void end_song(PcspkDriver *d)
@@ -130,9 +136,13 @@ void pcspk_tick(PcspkDriver *d)            /* 0x18E5 */
             case 0x3:               /* return */
                 si = rw(d, RET);
                 break;
-            case 0x4:               /* jump */
-                si = rw(d, si);
+            case 0x4: {             /* jump; back = the song repeats */
+                unsigned target = rw(d, si);
+                if (target < si)
+                    d->loops++;
+                si = target;
                 break;
+            }
             default:                /* 0xFF: end; nothing else is used */
                 end_song(d);
                 return;

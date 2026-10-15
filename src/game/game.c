@@ -17,7 +17,8 @@
 #define DEATH_VY_MIN (-16)
 #define JINGLE_MAX (8 * HZ)         /* longest wait for a jingle (no audio device: no end) */
 #define SLIDE_FRAMES 31             /* image 0x3964: "GAME OVER" / "THE END" letters */
-#define GAME_OVER_WAIT 150          /* then until the jingle ends, at most this many frames */
+#define GAME_OVER_WAIT 150          /* without sound: this long after the letters */
+#define GAME_OVER_MAX (70 * HZ)     /* with sound: until song 2 has played through (59 s) */
 #define CREDITS_MIN HZ
 #define CREDITS_MAX (30 * HZ)
 #define SPRITE_DEATH 13
@@ -591,6 +592,7 @@ static void play_frame(Game *g)
     if (g->game_over) {
         g->phase = PHASE_GAME_OVER;
         g->phase_frames = 0;
+        g->player.sprite = SPRITE_DEATH;    /* 0x3920, without the death's jump */
         play_song(g, SONG_GAME_OVER);
     } else if (g->dying == 1) {
         g->phase = PHASE_DYING;
@@ -628,12 +630,16 @@ static void dying_frame(Game *g)
     go(g, GO_CARD);
 }
 
-static void game_over_frame(Game *g)    /* 0x3910 */
+/* 0x3910: "GAME OVER" slides in over Titus. The original then goes straight back to the
+ * menu; here it stays while song 2 plays through once (or until a button is pressed). */
+static void game_over_frame(Game *g)
 {
     hold_motion(g);
     g->phase_frames++;
-    if (g->phase_frames < SLIDE_FRAMES + 20 ||
-        (!audio_music_finished() && g->phase_frames < SLIDE_FRAMES + GAME_OVER_WAIT))
+    if (g->phase_frames < SLIDE_FRAMES + 20)
+        return;
+    int limit = audio_active() ? GAME_OVER_MAX : SLIDE_FRAMES + GAME_OVER_WAIT;
+    if (!any_pressed() && !audio_music_played() && g->phase_frames < limit)
         return;
     go(g, GO_MENU);
 }

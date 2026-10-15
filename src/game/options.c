@@ -17,20 +17,21 @@ enum {
 #if FOXRV_WITH_OPL
     ROW_SOUND,
 #endif
-    ROW_UP_THRESHOLD, ROW_UP_DELAY, ROW_MAP, ROW_RESET, ROW_BACK, ROW_COUNT
+    ROW_SCREEN, ROW_UP_THRESHOLD, ROW_UP_DELAY, ROW_MAP, ROW_RESET, ROW_BACK, ROW_COUNT
 };
 static const char *const row_labels[ROW_COUNT] = {
     "Difficulty",
 #if FOXRV_WITH_OPL
     "Sound",
 #endif
-    "Pad up: stick push", "Pad up: hold time", "Map controller", "Reset controller", "Back",
+    "Screen", "Pad up: stick push", "Pad up: hold time", "Map controller", "Reset controller", "Back",
 };
 static const char *const row_help[ROW_COUNT] = {
     NULL,                       /* the difficulty's own description */
 #if FOXRV_WITH_OPL
     "AdLib music card, or the PC speaker's beeps.",
 #endif
+    NULL,                       /* the fit's own description */
     "How far the stick must go up. Higher: fewer false ups.",
     "How long the pad must hold up. Longer: fewer false ups.",
     "Press each control in turn on the controller.",
@@ -39,6 +40,13 @@ static const char *const row_help[ROW_COUNT] = {
 };
 #define THRESHOLD_STEP 5
 #define LOGIC_HZ 36.413
+
+static const char *const fit_labels[FIT_COUNT] = {"Whole pixels", "Fit", "Stretch"};
+static const char *const fit_help[FIT_COUNT] = {
+    "Pixels scaled by whole numbers: the sharpest.",
+    "As large as fits, same shape: slightly uneven pixels.",
+    "Fills the screen: slightly wider than the original.",
+};
 
 static const char *const difficulty_labels[DIFF_COUNT] = {"High", "Medium", "Low"};
 static const char *const difficulty_ini[DIFF_COUNT] = {"high", "medium", "low"};
@@ -149,6 +157,10 @@ static void change_value(Options *o, int row, int step, int *difficulty)
             say(o, "No sound device: the game runs silent.");
         ok = config_save_value("audio", "device", d == AUDIO_ADLIB ? "adlib" : "speaker");
 #endif
+    } else if (row == ROW_SCREEN) {
+        ViewFit f = (ViewFit)((video_fit() + step + FIT_COUNT) % FIT_COUNT);
+        video_set_fit(f);
+        ok = config_save_value("video", "fit", config_fit_name(f));
     } else if (row == ROW_UP_THRESHOLD) {
         int t = input_pad_up_threshold() + step * THRESHOLD_STEP;
         t = t > PAD_UP_THRESHOLD_MAX ? PAD_UP_THRESHOLD_MIN : t < PAD_UP_THRESHOLD_MIN ? PAD_UP_THRESHOLD_MAX : t;
@@ -171,7 +183,7 @@ static bool has_value(int row)
     if (row == ROW_SOUND)
         return true;
 #endif
-    return row == ROW_DIFFICULTY || row == ROW_UP_THRESHOLD || row == ROW_UP_DELAY;
+    return row == ROW_DIFFICULTY || row == ROW_SCREEN || row == ROW_UP_THRESHOLD || row == ROW_UP_DELAY;
 }
 
 static void row_value(int row, int difficulty, char *buf, size_t size)
@@ -183,6 +195,8 @@ static void row_value(int row, int difficulty, char *buf, size_t size)
     else if (row == ROW_SOUND)
         SDL_strlcpy(buf, audio_device() == AUDIO_ADLIB ? "AdLib" : "PC speaker", size);
 #endif
+    else if (row == ROW_SCREEN)
+        SDL_strlcpy(buf, fit_labels[video_fit()], size);
     else if (row == ROW_UP_THRESHOLD)
         SDL_snprintf(buf, size, "%d%%", input_pad_up_threshold());
     else if (row == ROW_UP_DELAY && input_pad_up_delay() == 0)
@@ -254,6 +268,7 @@ bool options_update(Options *o, int *difficulty)
 #if FOXRV_WITH_OPL
     case ROW_SOUND:
 #endif
+    case ROW_SCREEN:
     case ROW_UP_THRESHOLD:
     case ROW_UP_DELAY:
         step = 1;
@@ -301,7 +316,7 @@ static const Layout full = {
 };
 static const Layout compact_keys = {
     320, 200, 6, 9, 9,
-    4, 4, 3, 2, 4,
+    0, 0, 0, 0, 0,              /* gaps: the spare height, shared out in options_draw */
     1, 2,
     false, true,
     170, 112, 208,
@@ -309,7 +324,7 @@ static const Layout compact_keys = {
 };
 static const Layout compact_pad = {     /* no keyboard: the controller column gets its room */
     320, 200, 6, 9, 9,
-    4, 4, 3, 2, 4,
+    0, 0, 0, 0, 0,              /* gaps: the spare height, shared out in options_draw */
     1, 2,
     false, true,
     170, 0, 132,
@@ -479,6 +494,15 @@ void options_draw(const Options *o, int difficulty, SDL_Renderer *r, SDL_Color c
     const Layout *l = &full;
     if (area.w < full.w + 60 || area.h < full.h + 30)
         l = SDL_HasKeyboard() ? &compact_keys : &compact_pad;
+    Layout spaced;
+    if (l->compact) {
+        /* Its spare height, shared by the 9 gaps around the title, separators and parts. */
+        spaced = *l;
+        float parts = 2 * GLYPH + ROW_COUNT * l->row_h + (l->help_lines + OPTIONS_MAPPED) * l->line + 3;
+        float gap = SDL_floorf((l->h - parts) / 9);
+        spaced.gap_title = spaced.gap_rows = spaced.gap_help = spaced.gap_sep_before = spaced.gap_sep_after = gap;
+        l = &spaced;
+    }
     /* Whole interface pixels, as large as still fits the panel (the roomy one with some room
      * around it). */
     float room_w = l->compact ? 0 : 60, room_h = l->compact ? 0 : 30;
@@ -494,7 +518,7 @@ void options_draw(const Options *o, int difficulty, SDL_Renderer *r, SDL_Color c
     SDL_RenderRect(r, &(SDL_FRect){u.x, u.y, l->w, l->h});
 
     /* Title, twice the size in the roomy layout. */
-    float top = l->compact ? 5 : l->margin;
+    float top = l->compact ? l->gap_title : l->margin;
     SDL_SetRenderScale(r, (float)(scale * l->title_scale), (float)(scale * l->title_scale));
     ink(&u, 100, 255);
     SDL_RenderDebugText(r, (u.x + l->margin) / l->title_scale, (u.y + top) / l->title_scale, "OPTIONS");
@@ -514,7 +538,9 @@ void options_draw(const Options *o, int difficulty, SDL_Renderer *r, SDL_Color c
     else if (o->mapping >= 0)
         SDL_snprintf(help, sizeof help, "Mapping %d of %d: %s", o->mapping + 1, OPTIONS_MAPPED, mapped[o->mapping].label);
     else
-        SDL_strlcpy(help, o->list.sel == ROW_DIFFICULTY ? difficulty_help[difficulty] : row_help[o->list.sel], sizeof help);
+        SDL_strlcpy(help, o->list.sel == ROW_DIFFICULTY ? difficulty_help[difficulty]
+                          : o->list.sel == ROW_SCREEN   ? fit_help[video_fit()]
+                                                        : row_help[o->list.sel], sizeof help);
     text_wrapped(&u, l->margin, y, help, message ? 100 : 70, l->cut_text, l->help_lines);
     y += l->help_lines * l->line + l->gap_sep_before;
 
