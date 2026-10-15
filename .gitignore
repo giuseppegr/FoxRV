@@ -13,8 +13,8 @@ tools/stderr.txt
 
 # The original game and everything extracted from it (copyrighted data). Keep these
 # local: the engine reads game/ (next to the executable); export/ is written from TTF/ by
-# the optional scripts in tools/.
-TTF/
-game/
-TestTitus.7z
-export/
+# the optional scripts in tools/. Anchored to the root so src/game/ is not caught.
+/TTF/
+/game/
+/TestTitus.7z
+/export/
