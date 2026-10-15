@@ -11,6 +11,13 @@
 
 #define PATH_MAX_LEN 512
 
+/* Builds without the OPL emulator (the 3DS) only have the PC speaker. */
+#ifndef FOXRV_WITH_OPL
+#define FOXRV_WITH_OPL 1
+#endif
+
+typedef enum { AUDIO_ADLIB, AUDIO_SPEAKER } AudioDevice;
+
 typedef struct {
     /* [video] */
     int scale;              /* initial window height = scale x min_view_height */
@@ -22,6 +29,7 @@ typedef struct {
     int upscale;            /* art smoothing at load: 1 = none, 2..4; 0 = auto */
 
     /* [audio] */
+    AudioDevice audio_device;   /* adlib or speaker */
     int master_volume;      /* 0..100 */
     int music_volume;       /* 0..100 */
     int sfx_volume;         /* 0..100 */

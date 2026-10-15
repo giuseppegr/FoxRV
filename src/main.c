@@ -9,6 +9,9 @@
  *   foxrv --selftest          headless physics checks against the original's values
  *   foxrv --dump-opl SONG [TICKS]
  *                             print the driver's OPL writes as "tick reg val" (no audio device)
+ *   foxrv --dump-pcspk SONG [TICKS]
+ *                             print the PC speaker driver's divisors as "tick divisor", and
+ *                             "tick off" when the song ends (no audio device)
  *   --debug                   with any of the above: print the log (off by default; on
  *                             Windows the game has no console window unless it's given)
  */
@@ -19,6 +22,7 @@
 #include <string.h>
 
 #include "audio/adlib_driver.h"
+#include "audio/pcspk_driver.h"
 #include "core/assets.h"
 #include "core/config.h"
 #include "game/game.h"
@@ -75,6 +79,7 @@ static bool take_flag(int *argc, char **argv, const char *flag)
     return false;
 }
 
+#if FOXRV_WITH_OPL
 static void opl_print(void *user, uint8_t reg, uint8_t val)
 {
     printf("%d %d %d\n", *(int *)user, reg, val);
@@ -89,6 +94,24 @@ static int dump_opl(int song, int ticks)
     while (tick < ticks) {
         tick++;
         adlib_music_tick(&d);
+    }
+    return 0;
+}
+#endif
+
+static int dump_pcspk(int song, int ticks)
+{
+    static PcspkDriver d;
+    pcspk_init(&d, assets_data_segment(), ASSETS_DS_SIZE);
+    pcspk_play(&d, song);
+    unsigned writes = d.writes;
+    for (int tick = 1; tick <= ticks && pcspk_active(&d); tick++) {
+        pcspk_tick(&d);
+        if (d.writes != writes)
+            printf("%d %u\n", tick, d.divisor);
+        if (!pcspk_active(&d))
+            printf("%d off\n", tick);
+        writes = d.writes;
     }
     return 0;
 }
@@ -142,7 +165,8 @@ static void load_settings(Settings *s)
 int main(int argc, char **argv)
 {
     bool debug = take_flag(&argc, argv, "--debug");
-    bool headless = argc >= 2 && (!strcmp(argv[1], "--selftest") || !strcmp(argv[1], "--dump-opl"));
+    bool headless = argc >= 2 && (!strcmp(argv[1], "--selftest") || !strcmp(argv[1], "--dump-opl") ||
+                                  !strcmp(argv[1], "--dump-pcspk"));
     if (debug || headless)          /* the headless modes print their results */
         console_open();
     SDL_SetLogOutputFunction(debug ? log_print : log_discard, NULL);
@@ -157,8 +181,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
+#if FOXRV_WITH_OPL
     if (argc >= 3 && !strcmp(argv[1], "--dump-opl"))
         return dump_opl(atoi(argv[2]), argc >= 4 ? atoi(argv[3]) : 2000);
+#endif
+    if (argc >= 3 && !strcmp(argv[1], "--dump-pcspk"))
+        return dump_pcspk(atoi(argv[2]), argc >= 4 ? atoi(argv[3]) : 2000);
     if (argc >= 2 && !strcmp(argv[1], "--selftest"))
         return selftest_run();
     int start_level = 0;            /* 0 = intro and menu */

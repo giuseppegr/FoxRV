@@ -25,15 +25,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3)
 
+# AdLib sound needs the OPL emulator; without it (or on the 3DS, too slow there) only the
+# PC speaker remains.
+option(FOXRV_WITH_OPL "AdLib sound through the Nuked-OPL3 emulator" ON)
+
 # --- Vendored single-file libraries (third_party/, licenses kept alongside) ----------------
-add_library(thirdparty STATIC
-    third_party/nuked-opl3/opl3.c
-)
-target_include_directories(thirdparty SYSTEM PUBLIC
-    third_party/nuked-opl3
-)
-# Always optimised, also in Debug builds: the OPL emulator is the hot path for audio.
-target_compile_options(thirdparty PRIVATE -O2)
+if(FOXRV_WITH_OPL)
+    add_library(thirdparty STATIC
+        third_party/nuked-opl3/opl3.c
+    )
+    target_include_directories(thirdparty SYSTEM PUBLIC
+        third_party/nuked-opl3
+    )
+    # Always optimised, also in Debug builds: the OPL emulator is the hot path for audio.
+    target_compile_options(thirdparty PRIVATE -O2)
+endif()
 
 # --- Engine ----------------------------------------------------------------------------------
 add_executable(foxrv
@@ -46,8 +52,11 @@ add_executable(foxrv
     src/platform/font.c
     src/platform/input.c
     src/platform/audio.c
+    src/platform/audio_speaker.c
     src/audio/adlib_driver.c
-    src/audio/synth.c
+    src/audio/pcspk_driver.c
+    src/audio/speaker.c
+    src/audio/speaker_sfx.c
     src/game/anim.c
     src/game/level.c
     src/game/player.c
@@ -63,7 +72,14 @@ add_executable(foxrv
 )
 set_target_properties(foxrv PROPERTIES OUTPUT_NAME FoxRV)    # FoxRV.exe / FoxRV; the target stays foxrv
 target_include_directories(foxrv PRIVATE src)
-target_link_libraries(foxrv PRIVATE SDL3::SDL3-static thirdparty m)
+target_link_libraries(foxrv PRIVATE SDL3::SDL3-static m)
+if(FOXRV_WITH_OPL)
+    target_sources(foxrv PRIVATE src/audio/synth.c src/platform/audio_opl.c)
+    target_link_libraries(foxrv PRIVATE thirdparty)
+    target_compile_definitions(foxrv PRIVATE FOXRV_WITH_OPL=1)
+else()
+    target_compile_definitions(foxrv PRIVATE FOXRV_WITH_OPL=0)
+endif()
 target_compile_options(foxrv PRIVATE -Wall -Wextra -Wshadow -Wno-unused-parameter)
 
 # Windows: the .exe's icon, and a GUI program, so no console window opens. --debug,

@@ -4,6 +4,7 @@
 
 #include "core/config.h"
 #include "game/game.h"
+#include "platform/audio.h"
 #include "platform/video.h"
 
 #define MESSAGE_FRAMES (3 * 36)
@@ -18,12 +19,26 @@
 #define COL_KEYS (MARGIN + 128)
 #define COL_PAD (COL_KEYS + 120)
 
-enum { ROW_DIFFICULTY, ROW_UP_THRESHOLD, ROW_UP_DELAY, ROW_MAP, ROW_RESET, ROW_BACK, ROW_COUNT };
+/* Builds without the OPL emulator have only the PC speaker, so no Sound row. */
+enum {
+    ROW_DIFFICULTY,
+#if FOXRV_WITH_OPL
+    ROW_SOUND,
+#endif
+    ROW_UP_THRESHOLD, ROW_UP_DELAY, ROW_MAP, ROW_RESET, ROW_BACK, ROW_COUNT
+};
 static const char *const row_labels[ROW_COUNT] = {
-    "Difficulty", "Pad up: stick push", "Pad up: hold time", "Map controller", "Reset controller", "Back",
+    "Difficulty",
+#if FOXRV_WITH_OPL
+    "Sound",
+#endif
+    "Pad up: stick push", "Pad up: hold time", "Map controller", "Reset controller", "Back",
 };
 static const char *const row_help[ROW_COUNT] = {
     NULL,                       /* the difficulty's own description */
+#if FOXRV_WITH_OPL
+    "AdLib music card, or the PC speaker's beeps.",
+#endif
     "How far the stick must go up. Higher: fewer false ups.",
     "How long the pad must hold up. Longer: fewer false ups.",
     "Press each control in turn on the controller.",
@@ -135,6 +150,13 @@ static void change_value(Options *o, int row, int step, int *difficulty)
     if (row == ROW_DIFFICULTY) {
         *difficulty = (*difficulty + step + DIFF_COUNT) % DIFF_COUNT;
         ok = config_save_value("player", "difficulty", difficulty_ini[*difficulty]);
+#if FOXRV_WITH_OPL
+    } else if (row == ROW_SOUND) {
+        AudioDevice d = audio_device() == AUDIO_ADLIB ? AUDIO_SPEAKER : AUDIO_ADLIB;
+        if (!audio_set_device(d))
+            say(o, "No sound device: the game runs silent.");
+        ok = config_save_value("audio", "device", d == AUDIO_ADLIB ? "adlib" : "speaker");
+#endif
     } else if (row == ROW_UP_THRESHOLD) {
         int t = input_pad_up_threshold() + step * THRESHOLD_STEP;
         t = t > PAD_UP_THRESHOLD_MAX ? PAD_UP_THRESHOLD_MIN : t < PAD_UP_THRESHOLD_MIN ? PAD_UP_THRESHOLD_MAX : t;
@@ -151,13 +173,24 @@ static void change_value(Options *o, int row, int step, int *difficulty)
         say(o, "Couldn't save engine.ini: the change lasts until you quit.");
 }
 
-static bool has_value(int row) { return row == ROW_DIFFICULTY || row == ROW_UP_THRESHOLD || row == ROW_UP_DELAY; }
+static bool has_value(int row)
+{
+#if FOXRV_WITH_OPL
+    if (row == ROW_SOUND)
+        return true;
+#endif
+    return row == ROW_DIFFICULTY || row == ROW_UP_THRESHOLD || row == ROW_UP_DELAY;
+}
 
 static void row_value(int row, int difficulty, char *buf, size_t size)
 {
     buf[0] = '\0';
     if (row == ROW_DIFFICULTY)
         SDL_strlcpy(buf, difficulty_labels[difficulty], size);
+#if FOXRV_WITH_OPL
+    else if (row == ROW_SOUND)
+        SDL_strlcpy(buf, audio_device() == AUDIO_ADLIB ? "AdLib" : "PC speaker", size);
+#endif
     else if (row == ROW_UP_THRESHOLD)
         SDL_snprintf(buf, size, "%d%%", input_pad_up_threshold());
     else if (row == ROW_UP_DELAY && input_pad_up_delay() == 0)
@@ -226,6 +259,9 @@ bool options_update(Options *o, int *difficulty)
         step = input_pressed(ACT_RIGHT) ? 1 : input_pressed(ACT_LEFT) ? -1 : 0;
     switch (menu_list_update(&o->list)) {
     case ROW_DIFFICULTY:
+#if FOXRV_WITH_OPL
+    case ROW_SOUND:
+#endif
     case ROW_UP_THRESHOLD:
     case ROW_UP_DELAY:
         step = 1;

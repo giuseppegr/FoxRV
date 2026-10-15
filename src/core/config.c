@@ -16,6 +16,7 @@ void settings_defaults(Settings *s)
     s->aspect = 0.0f;
     s->min_view_height = 240;
     s->upscale = 0;
+    s->audio_device = FOXRV_WITH_OPL ? AUDIO_ADLIB : AUDIO_SPEAKER;
     s->master_volume = 80;
     s->music_volume = 100;
     s->sfx_volume = 100;
@@ -66,7 +67,8 @@ static bool apply(Settings *s, const char *sec, const char *key, const char *val
         else if (!SDL_strcasecmp(key, "upscale")) s->upscale = !SDL_strcasecmp(val, "auto") ? 0 : SDL_clamp(atoi(val), 1, 4);
         else return false;
     } else if (!SDL_strcasecmp(sec, "audio")) {
-        if (!SDL_strcasecmp(key, "master_volume")) s->master_volume = SDL_clamp(atoi(val), 0, 100);
+        if (!SDL_strcasecmp(key, "device")) s->audio_device = FOXRV_WITH_OPL && !SDL_strcasecmp(val, "adlib") ? AUDIO_ADLIB : AUDIO_SPEAKER;
+        else if (!SDL_strcasecmp(key, "master_volume")) s->master_volume = SDL_clamp(atoi(val), 0, 100);
         else if (!SDL_strcasecmp(key, "music_volume")) s->music_volume = SDL_clamp(atoi(val), 0, 100);
         else if (!SDL_strcasecmp(key, "sfx_volume")) s->sfx_volume = SDL_clamp(atoi(val), 0, 100);
         else if (!SDL_strcasecmp(key, "music_buffer_ms")) s->music_buffer_ms = SDL_clamp(atoi(val), 100, 30000);
