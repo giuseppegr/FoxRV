@@ -55,6 +55,18 @@ static float parse_aspect(const char *v)
     return (float)atof(v);
 }
 
+/* "320x200", or "auto" (0 x 0). */
+static void parse_size(const char *v, int *w, int *h)
+{
+    const char *x = strpbrk(v, "xX");
+    if (SDL_strcasecmp(v, "auto") && x) {
+        *w = SDL_clamp(atoi(v), 320, 1920);
+        *h = SDL_clamp(atoi(x + 1), 200, 1080);
+    } else {
+        *w = *h = 0;
+    }
+}
+
 static bool apply(Settings *s, const char *sec, const char *key, const char *val)
 {
     if (!SDL_strcasecmp(sec, "video")) {
@@ -64,6 +76,7 @@ static bool apply(Settings *s, const char *sec, const char *key, const char *val
         else if (!SDL_strcasecmp(key, "max_fps")) s->max_fps = SDL_clamp(atoi(val), 0, 1000);
         else if (!SDL_strcasecmp(key, "aspect")) s->aspect = parse_aspect(val);
         else if (!SDL_strcasecmp(key, "min_view_height")) s->min_view_height = SDL_clamp(atoi(val), 200, 1080);
+        else if (!SDL_strcasecmp(key, "view_size")) parse_size(val, &s->view_w, &s->view_h);
         else if (!SDL_strcasecmp(key, "upscale")) s->upscale = !SDL_strcasecmp(val, "auto") ? 0 : SDL_clamp(atoi(val), 1, 4);
         else return false;
     } else if (!SDL_strcasecmp(sec, "audio")) {

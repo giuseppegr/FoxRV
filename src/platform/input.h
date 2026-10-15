@@ -103,8 +103,9 @@ void input_binding_spec(Action a, char *buf, size_t size);
 bool input_pad_connected(void);
 
 /* Waits for the next gamepad button press or stick / trigger push; meanwhile the gamepads and
- * keyboard trigger no actions. Poll returns 1 with *out set, -1 if Escape was pressed (which
- * also ends the capture), 0 while waiting. An axis already pushed must go back to rest first. */
+ * keyboard trigger no actions. Poll returns 1 with *out set, -1 if Escape was pressed or the
+ * pad's Back held for a second (which also ends the capture), 0 while waiting. An axis already
+ * pushed must go back to rest first; Back counts when it's released. */
 void input_capture_start(void);
 void input_capture_stop(void);
 int input_capture_poll(PadInput *out);

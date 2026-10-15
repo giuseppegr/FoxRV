@@ -27,6 +27,7 @@ typedef struct {
     float aspect;           /* forced aspect of the game view; 0 = fill the window */
     int min_view_height;    /* fewest game pixels shown vertically; sets the pixel scale */
     int upscale;            /* art smoothing at load: 1 = none, 2..4; 0 = auto */
+    int view_w, view_h;     /* fixed game view size, e.g. the original 320x200; 0 = fill the window */
 
     /* [audio] */
     AudioDevice audio_device;   /* adlib or speaker */

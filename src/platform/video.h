@@ -5,6 +5,9 @@
  * `min_view_height` game pixels vertically; the view then covers the whole window, so a 16:9
  * window shows more of the level than the original 320x200 screen: 427x240 at 1280x720,
  * 480x270 at 1920x1080. Leftover pixels (less than k) become a thin black border.
+ *
+ * With a fixed `view_size` (e.g. the original 320x200) the view keeps that size instead, at
+ * the largest scale that fits, centred with black borders around it.
  */
 #ifndef FOXRV_VIDEO_H
 #define FOXRV_VIDEO_H
@@ -37,6 +40,8 @@ void video_present(void);
 
 /* The window's size in pixels. */
 void video_output_size(int *w, int *h);
+/* Where the view lands in the window, in window pixels. */
+void video_view_rect(SDL_FRect *r);
 /* The refresh rate of the window's display, in Hz (60 if it isn't known). */
 int video_refresh_rate(void);
 

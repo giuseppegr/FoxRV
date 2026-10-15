@@ -13,6 +13,7 @@ static SDL_FRect dst;           /* where the view lands in the window */
 static uint8_t fade = 255;
 static float cfg_aspect;
 static int cfg_min_view_h;
+static int cfg_view_w, cfg_view_h;     /* fixed view size; 0 = fill the window */
 static char capture_path[PATH_MAX_LEN];
 
 /* View size in game pixels, and the whole-number pixel scale k, for a pw x ph output. */
@@ -27,6 +28,12 @@ static void layout(int pw, int ph, int *view_wp, int *view_hp, int *kp)
             ah = (int)lroundf(pw / cfg_aspect);
     }
 
+    if (cfg_view_w > 0) {
+        *view_wp = cfg_view_w;
+        *view_hp = cfg_view_h;
+        *kp = SDL_max(1, SDL_min(aw / cfg_view_w, ah / cfg_view_h));
+        return;
+    }
     int k = SDL_max(1, ah / cfg_min_view_h);
     while (k > 1 && aw / k < VIEW_MIN_W)
         k--;
@@ -107,17 +114,31 @@ bool video_init(const Settings *s, const char *title)
 {
     cfg_aspect = s->aspect;
     cfg_min_view_h = s->min_view_height;
+    cfg_view_w = s->view_w;
+    cfg_view_h = s->view_h;
 
+#ifdef __3DS__
+    /* The top screen. */
+    int w = 400, h = 240;
+    SDL_WindowFlags flags = 0;
+#else
     /* w x h is also the window's size when leaving fullscreen. */
     int h = s->min_view_height * s->scale;
     int w = (int)lroundf(h * (s->aspect > 0 ? s->aspect : 16.0f / 9.0f));
+    if (cfg_view_w > 0) {
+        w = cfg_view_w * s->scale;
+        h = cfg_view_h * s->scale;
+    }
     SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | (s->fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+#endif
     if (!SDL_CreateWindowAndRenderer(title, w, h, flags, &window, &renderer)) {
         SDL_Log("video: %s", SDL_GetError());
         return false;
     }
+#ifndef __3DS__
     set_icon();
     SDL_SetWindowMinimumSize(window, VIEW_MIN_W, VIEW_MIN_H);
+#endif
     SDL_SetRenderVSync(renderer, s->vsync ? 1 : 0);
     SDL_Log("video: renderer '%s', window %dx%d", SDL_GetRendererName(renderer), w, h);
 
@@ -172,6 +193,8 @@ void video_output_size(int *w, int *h)
     if (!SDL_GetCurrentRenderOutputSize(renderer, w, h))
         *w = *h = 0;
 }
+
+void video_view_rect(SDL_FRect *r) { *r = dst; }
 
 int video_refresh_rate(void)
 {

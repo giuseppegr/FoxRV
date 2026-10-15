@@ -1,6 +1,7 @@
 #include "core/assets.h"
 
 #include <SDL3/SDL.h>
+#include <string.h>
 
 #include "core/config.h"
 #include "core/sqz.h"
@@ -23,9 +24,11 @@ static bool find_file(const char *dir, const char *name, char *out, size_t cap)
     return ok;
 }
 
+/* "/x", "\x", or a drive or device before the first separator: "C:x", the 3DS's "sdmc:/x". */
 static bool is_absolute(const char *p)
 {
-    return p[0] == '/' || p[0] == '\\' || (p[0] && p[1] == ':');
+    size_t n = strcspn(p, "/\\:");
+    return p[0] == '/' || p[0] == '\\' || (n > 0 && p[n] == ':');
 }
 
 static bool unpack_data_segment(const char *path)

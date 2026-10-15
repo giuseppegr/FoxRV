@@ -9,15 +9,7 @@
 
 #define MESSAGE_FRAMES (3 * 36)
 
-/* Layout, in interface pixels (window pixels / the interface scale). */
-#define PANEL_W 500
-#define PANEL_H (242 + ROW_COUNT * ROW_H)
-#define MARGIN 14
 #define GLYPH 8                 /* SDL's debug font: 8 x 8 */
-#define LINE 12
-#define ROW_H 14
-#define COL_KEYS (MARGIN + 128)
-#define COL_PAD (COL_KEYS + 120)
 
 /* Builds without the OPL emulator have only the PC speaker, so no Sound row. */
 enum {
@@ -287,11 +279,49 @@ bool options_update(Options *o, int *difficulty)
 
 /* --- draw --------------------------------------------------------------------------------- */
 
+/* Where things go, in interface pixels (window pixels / the interface scale). Cuts are in
+ * characters; a column at 0 isn't drawn. */
+typedef struct {
+    float w, h, margin, line, row_h;
+    float gap_title, gap_rows, gap_help, gap_sep_before, gap_sep_after;
+    int title_scale, help_lines;
+    bool header, compact;
+    float col_value, col_keys, col_pad;
+    int cut_label, cut_value, cut_action, cut_keys, cut_pad, cut_text;
+} Layout;
+
+/* Roomy, for windows; and one that fits the original 320 x 200 screen. */
+static const Layout full = {
+    500, 242 + ROW_COUNT * 14, 14, 12, 14,
+    10, 12, 6, 8, 10,
+    2, 1,
+    true, false,
+    262, 142, 262,
+    30, 30, 16, 15, 28, 59,
+};
+static const Layout compact_keys = {
+    320, 200, 6, 9, 9,
+    4, 4, 3, 2, 4,
+    1, 2,
+    false, true,
+    170, 112, 208,
+    20, 18, 13, 11, 13, 38,
+};
+static const Layout compact_pad = {     /* no keyboard: the controller column gets its room */
+    320, 200, 6, 9, 9,
+    4, 4, 3, 2, 4,
+    1, 2,
+    false, true,
+    170, 0, 132,
+    20, 18, 15, 0, 22, 38,
+};
+
 typedef struct {
     SDL_Renderer *r;
     SDL_Color color;
     uint8_t bright;
     float x, y;                 /* the panel's top-left corner */
+    const Layout *l;
 } Ui;
 
 /* The text colour at `pct` percent, with the fade. */
@@ -313,6 +343,27 @@ static void text(const Ui *u, float x, float y, const char *s, int pct, int max)
     SDL_RenderDebugText(u->r, u->x + x, u->y + y, buf);
 }
 
+/* Text over up to `lines` lines of `max` characters, broken at spaces. */
+static void text_wrapped(const Ui *u, float x, float y, const char *s, int pct, int max, int lines)
+{
+    for (int n = 0; *s && n < lines; n++) {
+        int len = (int)strlen(s);
+        if (len > max && n < lines - 1) {
+            len = max;
+            while (len > 0 && s[len] != ' ')
+                len--;
+            if (len == 0)
+                len = max;
+        }
+        char buf[128];
+        SDL_strlcpy(buf, s, SDL_min((size_t)len + 1, sizeof buf));
+        text(u, x, y + n * u->l->line, buf, pct, max);
+        s += len;
+        while (*s == ' ')
+            s++;
+    }
+}
+
 static void fill(const Ui *u, float x, float y, float w, float h, int pct, uint8_t alpha)
 {
     ink(u, pct, alpha);
@@ -321,37 +372,48 @@ static void fill(const Ui *u, float x, float y, float w, float h, int pct, uint8
 
 static void separator(const Ui *u, float y)
 {
-    fill(u, MARGIN, y, PANEL_W - 2 * MARGIN, 1, 35, 255);
+    fill(u, u->l->margin, y, u->l->w - 2 * u->l->margin, 1, 35, 255);
+}
+
+/* The bar behind the selected line of text at `y`. */
+static void highlight(const Ui *u, float y, float h)
+{
+    float x = u->l->margin - SDL_min(u->l->margin - 2, 6), top = y - SDL_floorf((h - GLYPH) / 2);
+    fill(u, x, top, u->l->w - 2 * x, h, 100, 40);
+    fill(u, x, top, 3, h, 100, 255);
 }
 
 static void draw_rows(const Options *o, const Ui *u, int difficulty, float y)
 {
+    const Layout *l = u->l;
     bool mapping = o->mapping >= 0;
-    for (int i = 0; i < ROW_COUNT; i++, y += ROW_H) {
+    for (int i = 0; i < ROW_COUNT; i++, y += l->row_h) {
         bool on = i == o->list.sel && !mapping;
-        if (on) {
-            fill(u, MARGIN - 6, y - 3, PANEL_W - 2 * MARGIN + 12, ROW_H, 100, 40);
-            fill(u, MARGIN - 6, y - 3, 3, ROW_H, 100, 255);
-        }
-        text(u, MARGIN, y, row_labels[i], on ? 100 : 65, 30);
+        if (on)
+            highlight(u, y, l->row_h);
+        text(u, l->margin, y, row_labels[i], on ? 100 : 65, l->cut_label);
         if (has_value(i)) {
             char v[32], value[48];
             row_value(i, difficulty, v, sizeof v);
             SDL_snprintf(value, sizeof value, on ? "<  %s  >" : "   %s", v);
-            text(u, COL_PAD, y, value, on ? 100 : 65, 30);
+            text(u, l->col_value, y, value, on ? 100 : 65, l->cut_value);
         } else if (i == ROW_MAP && !input_pad_connected()) {
-            text(u, COL_PAD, y, "no controller connected", 45, 30);
+            text(u, l->col_value, y, l->compact ? "no controller" : "no controller connected", 45, l->cut_value);
         }
     }
 }
 
 static void draw_controls(const Options *o, const Ui *u, float y)
 {
-    text(u, MARGIN, y, "Action", 55, 16);
-    text(u, COL_KEYS, y, "Keyboard", 55, 15);
-    text(u, COL_PAD, y, "Controller", 55, 28);
-    y += LINE + 4;
-    for (int i = 0; i < OPTIONS_MAPPED; i++, y += LINE) {
+    const Layout *l = u->l;
+    if (l->header) {
+        text(u, l->margin, y, "Action", 55, l->cut_action);
+        if (l->col_keys)
+            text(u, l->col_keys, y, "Keyboard", 55, l->cut_keys);
+        text(u, l->col_pad, y, "Controller", 55, l->cut_pad);
+        y += l->line + 4;
+    }
+    for (int i = 0; i < OPTIONS_MAPPED; i++, y += l->line) {
         Action a = mapped[i].action;
         char keys[128], pad[128];
         input_describe_keys(a, keys, sizeof keys);
@@ -363,68 +425,110 @@ static void draw_controls(const Options *o, const Ui *u, float y)
             if (i < o->mapping) {
                 SDL_strlcpy(pad, input_pad_name(&o->captured[i]), sizeof pad);
             } else if (i == o->mapping) {
-                fill(u, MARGIN - 6, y - 2, PANEL_W - 2 * MARGIN + 12, LINE, 100, 40);
-                fill(u, MARGIN - 6, y - 2, 3, LINE, 100, 255);
-                SDL_strlcpy(pad, (o->frames / 12) & 1 ? "" : "> press a button <", sizeof pad);
+                highlight(u, y, l->line);
+                SDL_strlcpy(pad, (o->frames / 12) & 1 ? "" : l->compact ? "> press <" : "> press a button <", sizeof pad);
                 pct = 100;
             } else {
                 pct = 45;
             }
         }
-        text(u, MARGIN, y, mapped[i].label, pct, 16);
-        text(u, COL_KEYS, y, keys, pct, 15);
-        text(u, COL_PAD, y, pad, i == o->mapping ? 100 : pct, 28);
+        text(u, l->margin, y, mapped[i].label, pct, l->cut_action);
+        if (l->col_keys)
+            text(u, l->col_keys, y, keys, pct, l->cut_keys);
+        text(u, l->col_pad, y, pad, i == o->mapping ? 100 : pct, l->cut_pad);
     }
 }
 
+/* The first controller input of an action, e.g. "A". */
+static void first_pad_name(Action a, char *buf, size_t size)
+{
+    input_describe_pad(a, buf, size);
+    char *comma = strchr(buf, ',');
+    if (comma)
+        *comma = '\0';
+}
+
+/* The hints at the bottom, for the keyboard or, without one, the controller. */
+static void footer_hint(const Options *o, const Layout *l, char *buf, size_t size)
+{
+    if (SDL_HasKeyboard()) {
+        if (o->mapping >= 0)
+            SDL_strlcpy(buf, l->compact ? "Press a button.  Esc: cancel" : "Press a button or push a stick.  Esc: cancel", size);
+        else
+            SDL_strlcpy(buf, l->compact ? "Arrows move/change  Enter  Esc back" : "Up/Down move  Left/Right change  Enter select  Esc back", size);
+        return;
+    }
+    if (o->mapping >= 0) {
+        PadInput back = {false, SDL_GAMEPAD_BUTTON_BACK, 0};
+        SDL_snprintf(buf, size, "Press a button.  Hold %s: cancel", input_pad_name(&back));
+        return;
+    }
+    char ok[32], back[32];
+    first_pad_name(ACT_ACTION, ok, sizeof ok);
+    first_pad_name(ACT_MENU, back, sizeof back);
+    SDL_snprintf(buf, size, "%s: select  %s: back", ok, back);
+}
+
+/* Over the game view: the roomy layout where it fits, else the compact one. */
 void options_draw(const Options *o, int difficulty, SDL_Renderer *r, SDL_Color color, uint8_t bright)
 {
-    int w, h;
-    video_output_size(&w, &h);
-    if (w <= 0 || h <= 0)
+    SDL_FRect area;
+    video_view_rect(&area);
+    if (area.w <= 0 || area.h <= 0)
         return;
-    /* Whole interface pixels, as large as still fits the panel with some room around it. */
-    int scale = SDL_max(1, SDL_min(w / (PANEL_W + 60), h / (PANEL_H + 30)));
+    const Layout *l = &full;
+    if (area.w < full.w + 60 || area.h < full.h + 30)
+        l = SDL_HasKeyboard() ? &compact_keys : &compact_pad;
+    /* Whole interface pixels, as large as still fits the panel (the roomy one with some room
+     * around it). */
+    float room_w = l->compact ? 0 : 60, room_h = l->compact ? 0 : 30;
+    int scale = SDL_max(1, (int)SDL_min(area.w / (l->w + room_w), area.h / (l->h + room_h)));
     SDL_SetRenderScale(r, (float)scale, (float)scale);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    Ui u = {r, color, bright, SDL_floorf((w / scale - PANEL_W) / 2.0f), SDL_floorf((h / scale - PANEL_H) / 2.0f)};
+    Ui u = {r, color, bright, SDL_floorf(area.x / scale + (area.w / scale - l->w) / 2.0f),
+            SDL_floorf(area.y / scale + (area.h / scale - l->h) / 2.0f), l};
 
     SDL_SetRenderDrawColor(r, 10, 10, 14, (Uint8)(235 * bright / 255));
-    SDL_RenderFillRect(r, &(SDL_FRect){u.x, u.y, PANEL_W, PANEL_H});
+    SDL_RenderFillRect(r, &(SDL_FRect){u.x, u.y, l->w, l->h});
     ink(&u, 80, 255);
-    SDL_RenderRect(r, &(SDL_FRect){u.x, u.y, PANEL_W, PANEL_H});
+    SDL_RenderRect(r, &(SDL_FRect){u.x, u.y, l->w, l->h});
 
-    /* Title, twice the size. */
-    SDL_SetRenderScale(r, (float)scale * 2, (float)scale * 2);
+    /* Title, twice the size in the roomy layout. */
+    float top = l->compact ? 5 : l->margin;
+    SDL_SetRenderScale(r, (float)(scale * l->title_scale), (float)(scale * l->title_scale));
     ink(&u, 100, 255);
-    SDL_RenderDebugText(r, (u.x + MARGIN) / 2, (u.y + MARGIN) / 2, "OPTIONS");
+    SDL_RenderDebugText(r, (u.x + l->margin) / l->title_scale, (u.y + top) / l->title_scale, "OPTIONS");
     SDL_SetRenderScale(r, (float)scale, (float)scale);
 
-    float y = MARGIN + 2 * GLYPH + 10;
+    float y = top + l->title_scale * GLYPH + l->gap_title;
     separator(&u, y);
-    y += 12;
+    y += l->gap_rows;
     draw_rows(o, &u, difficulty, y);
-    y += ROW_COUNT * ROW_H + 6;
+    y += ROW_COUNT * l->row_h + l->gap_help;
 
+    /* The compact layout shows messages here, where they have two lines. */
     char help[96];
-    if (o->mapping >= 0)
+    bool message = o->message_frames > 0 && l->compact;
+    if (message)
+        SDL_strlcpy(help, o->message, sizeof help);
+    else if (o->mapping >= 0)
         SDL_snprintf(help, sizeof help, "Mapping %d of %d: %s", o->mapping + 1, OPTIONS_MAPPED, mapped[o->mapping].label);
     else
         SDL_strlcpy(help, o->list.sel == ROW_DIFFICULTY ? difficulty_help[difficulty] : row_help[o->list.sel], sizeof help);
-    text(&u, MARGIN, y, help, 70, 59);
-    y += LINE + 8;
+    text_wrapped(&u, l->margin, y, help, message ? 100 : 70, l->cut_text, l->help_lines);
+    y += l->help_lines * l->line + l->gap_sep_before;
 
     separator(&u, y);
-    y += 10;
+    y += l->gap_sep_after;
     draw_controls(o, &u, y);
-    y += LINE + 4 + OPTIONS_MAPPED * LINE + 8;
+    y += (l->header ? l->line + 4 : 0) + OPTIONS_MAPPED * l->line + l->gap_sep_before;
 
     separator(&u, y);
-    y += 10;
-    const char *footer = o->message_frames > 0 ? o->message
-                         : o->mapping >= 0     ? "Press a button or push a stick.  Esc: cancel"
-                                               : "Up/Down move  Left/Right change  Enter select  Esc back";
-    text(&u, MARGIN, y, footer, o->message_frames > 0 ? 100 : 55, 59);
+    y += l->gap_sep_after;
+    char hint[96];
+    footer_hint(o, l, hint, sizeof hint);
+    bool footer_message = o->message_frames > 0 && !l->compact;
+    text(&u, l->margin, y, footer_message ? o->message : hint, footer_message ? 100 : 55, l->cut_text);
 
     SDL_SetRenderScale(r, 1.0f, 1.0f);
 }

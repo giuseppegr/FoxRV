@@ -63,11 +63,13 @@ static int ntyped;
 
 #define AXIS_REST 8000          /* capture: an axis must be back under this ... */
 #define AXIS_CAPTURE 24000      /* ... before a push past this counts */
+#define CANCEL_HOLD_MS 1000     /* capture: Back held this long cancels (no keyboard needed) */
 
 static struct {
     bool active, aborted, got;
     PadInput in;
     bool armed[SDL_GAMEPAD_AXIS_COUNT];
+    Uint64 back_since;          /* when Back went down, 0 = up */
 } cap;
 
 static bool parse_binding(Binding *b, const char *spec)
@@ -177,7 +179,8 @@ static bool has_button(const Binding *b, int bt)
     return false;
 }
 
-/* While capturing: the next gamepad press or axis push, or Escape. */
+/* While capturing: the next gamepad press or axis push, or Escape. Back counts when it's
+ * released, so that holding it can cancel instead. */
 static void capture_event(const SDL_Event *e)
 {
     switch (e->type) {
@@ -186,9 +189,22 @@ static void capture_event(const SDL_Event *e)
             cap.aborted = true;
         break;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (e->gbutton.button == SDL_GAMEPAD_BUTTON_BACK) {
+            if (!cap.back_since)
+                cap.back_since = SDL_GetTicks();
+            break;
+        }
         if (!cap.got)
             cap.in = (PadInput){false, e->gbutton.button, 0};
         cap.got = true;
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        if (e->gbutton.button == SDL_GAMEPAD_BUTTON_BACK && cap.back_since) {
+            cap.back_since = 0;
+            if (!cap.got)
+                cap.in = (PadInput){false, SDL_GAMEPAD_BUTTON_BACK, 0};
+            cap.got = true;
+        }
         break;
     case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
         int ax = e->gaxis.axis, v = e->gaxis.value;
@@ -343,11 +359,25 @@ bool input_pad_equal(const PadInput *a, const PadInput *b)
     return a->axis == b->axis && a->code == b->code && (!a->axis || a->sign == b->sign);
 }
 
+/* The 3DS's own names. SDL maps its buttons by position, like the Xbox names below: B is
+ * the bottom one (south), A the right one (east). */
+#ifdef __3DS__
+#define NAME_LSTICK "Circle Pad"
+#define NAME_RSTICK "C-Stick"
+#define NAME_LT "ZL"
+#define NAME_RT "ZR"
+#else
+#define NAME_LSTICK "L-Stick"
+#define NAME_RSTICK "R-Stick"
+#define NAME_LT "LT"
+#define NAME_RT "RT"
+#endif
+
 const char *input_pad_name(const PadInput *in)
 {
     static char buf[32];
     if (in->axis) {
-        const char *stick = in->code == SDL_GAMEPAD_AXIS_LEFTX || in->code == SDL_GAMEPAD_AXIS_LEFTY ? "L-Stick" : "R-Stick";
+        const char *stick = in->code == SDL_GAMEPAD_AXIS_LEFTX || in->code == SDL_GAMEPAD_AXIS_LEFTY ? NAME_LSTICK : NAME_RSTICK;
         switch (in->code) {
         case SDL_GAMEPAD_AXIS_LEFTX:
         case SDL_GAMEPAD_AXIS_RIGHTX:
@@ -357,23 +387,33 @@ const char *input_pad_name(const PadInput *in)
         case SDL_GAMEPAD_AXIS_RIGHTY:
             SDL_snprintf(buf, sizeof buf, "%s %s", stick, in->sign < 0 ? "Up" : "Down");
             return buf;
-        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER: return "LT";
-        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return "RT";
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER: return NAME_LT;
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: return NAME_RT;
         default: return "?";
         }
     }
     switch (in->code) {
+#ifdef __3DS__
+    case SDL_GAMEPAD_BUTTON_SOUTH: return "B";
+    case SDL_GAMEPAD_BUTTON_EAST: return "A";
+    case SDL_GAMEPAD_BUTTON_WEST: return "Y";
+    case SDL_GAMEPAD_BUTTON_NORTH: return "X";
+    case SDL_GAMEPAD_BUTTON_BACK: return "Select";
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return "L";
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return "R";
+#else
     case SDL_GAMEPAD_BUTTON_SOUTH: return "A";
     case SDL_GAMEPAD_BUTTON_EAST: return "B";
     case SDL_GAMEPAD_BUTTON_WEST: return "X";
     case SDL_GAMEPAD_BUTTON_NORTH: return "Y";
     case SDL_GAMEPAD_BUTTON_BACK: return "Back";
+    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return "LB";
+    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return "RB";
+#endif
     case SDL_GAMEPAD_BUTTON_GUIDE: return "Guide";
     case SDL_GAMEPAD_BUTTON_START: return "Start";
     case SDL_GAMEPAD_BUTTON_LEFT_STICK: return "LS Click";
     case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return "RS Click";
-    case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return "LB";
-    case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return "RB";
     case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-Pad Up";
     case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-Pad Down";
     case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-Pad Left";
@@ -495,6 +535,7 @@ void input_capture_start(void)
 {
     cap.active = true;
     cap.aborted = cap.got = false;
+    cap.back_since = 0;
     for (int ax = 0; ax < SDL_GAMEPAD_AXIS_COUNT; ax++) {
         cap.armed[ax] = true;
         for (int p = 0; p < MAX_PADS; p++)
@@ -510,6 +551,10 @@ void input_capture_stop(void)
 
 int input_capture_poll(PadInput *out)
 {
+    if (cap.back_since && SDL_GetTicks() - cap.back_since >= CANCEL_HOLD_MS) {
+        cap.back_since = 0;
+        cap.aborted = true;
+    }
     if (cap.aborted) {
         cap.active = cap.aborted = false;
         return -1;
