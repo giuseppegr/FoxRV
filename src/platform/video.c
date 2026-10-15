@@ -16,12 +16,10 @@ static uint8_t fade = 255;
 static float cfg_aspect;
 static int cfg_min_view_h;
 static int cfg_view_w, cfg_view_h;     /* fixed view size; 0 = fill the window */
-static ViewFit fit;
 static char capture_path[PATH_MAX_LEN];
 
-/* View size in game pixels, and the whole-number pixel scale k, for a pw x ph output; also
- * the area the view may cover, *awp x *ahp. */
-static void layout(int pw, int ph, int *view_wp, int *view_hp, int *kp, int *awp, int *ahp)
+/* View size in game pixels, and the whole-number pixel scale k, for a pw x ph output. */
+static void layout(int pw, int ph, int *view_wp, int *view_hp, int *kp)
 {
     /* Area the view may cover: the whole window, or the largest rect of a forced aspect. */
     int aw = pw, ah = ph;
@@ -31,8 +29,6 @@ static void layout(int pw, int ph, int *view_wp, int *view_hp, int *kp, int *awp
         else
             ah = (int)lroundf(pw / cfg_aspect);
     }
-    *awp = aw;
-    *ahp = ah;
 
     if (cfg_view_w > 0) {
         *view_wp = cfg_view_w;
@@ -55,21 +51,11 @@ static void adapt_to_window(void)
     int pw, ph;
     if (!SDL_GetCurrentRenderOutputSize(renderer, &pw, &ph) || pw <= 0 || ph <= 0)
         return;
-    int w, h, k, aw, ah;
-    layout(pw, ph, &w, &h, &k, &aw, &ah);
+    int w, h, k;
+    layout(pw, ph, &w, &h, &k);
 
-    /* Whole pixels; or as large as fits the area, same shape; or all of it. */
-    float s = SDL_min((float)aw / (float)w, (float)ah / (float)h);
-    if (fit == FIT_STRETCH) {
-        dst.w = (float)aw;
-        dst.h = (float)ah;
-    } else if (fit == FIT_ASPECT) {
-        dst.w = SDL_roundf(w * s);
-        dst.h = SDL_roundf(h * s);
-    } else {
-        dst.w = (float)(w * k);
-        dst.h = (float)(h * k);
-    }
+    dst.w = (float)(w * k);
+    dst.h = (float)(h * k);
     dst.x = floorf((pw - dst.w) / 2);
     dst.y = floorf((ph - dst.h) / 2);
 
@@ -83,13 +69,11 @@ static void adapt_to_window(void)
             SDL_Log("video: can't create %dx%d view: %s", w * res, h * res, SDL_GetError());
             return;
         }
+        SDL_SetTextureScaleMode(view, SDL_SCALEMODE_NEAREST);
         view_w = w;
         view_h = h;
         view_res = res;
     }
-    /* Pixel art at a fractional scale: SDL's even-sized pixels (nearest without a GPU). */
-    bool whole = dst.w == (float)(w * k) && dst.h == (float)(h * k);
-    SDL_SetTextureScaleMode(view, whole ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_PIXELART);
 }
 
 /* upscale = auto: the art factor for the pixel scale at startup; one that divides it, so
@@ -105,8 +89,8 @@ static int auto_upscale(void)
     } else if (!SDL_GetCurrentRenderOutputSize(renderer, &pw, &ph) || pw <= 0 || ph <= 0) {
         return 1;
     }
-    int w, h, k, aw, ah;
-    layout(pw, ph, &w, &h, &k, &aw, &ah);
+    int w, h, k;
+    layout(pw, ph, &w, &h, &k);
     if (k <= 4)
         return k;
     for (int f = 4; f >= 2; f--)
@@ -136,7 +120,6 @@ bool video_init(const Settings *s, const char *title)
     cfg_min_view_h = s->min_view_height;
     cfg_view_w = s->view_w;
     cfg_view_h = s->view_h;
-    fit = s->fit;
 
 #ifdef __3DS__
     /* The top screen. */
@@ -217,8 +200,17 @@ void video_output_size(int *w, int *h)
 
 void video_view_rect(SDL_FRect *r) { *r = dst; }
 
-ViewFit video_fit(void) { return fit; }
-void video_set_fit(ViewFit f) { fit = f; }
+void video_view_size(int *w, int *h)
+{
+    *w = cfg_view_w;
+    *h = cfg_view_h;
+}
+
+void video_set_view_size(int w, int h)
+{
+    cfg_view_w = w;
+    cfg_view_h = h;
+}
 
 int video_refresh_rate(void)
 {

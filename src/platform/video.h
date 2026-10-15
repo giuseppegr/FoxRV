@@ -8,9 +8,6 @@
  *
  * With a fixed `view_size` (e.g. the original 320x200) the view keeps that size instead, at
  * the largest scale that fits, centred with black borders around it.
- *
- * `fit` can scale the view further, by a fraction: as large as fits with the same shape, or
- * stretched over the whole window (e.g. 320x200 to 384x240 or 400x240 on the 3DS).
  */
 #ifndef FOXRV_VIDEO_H
 #define FOXRV_VIDEO_H
@@ -45,9 +42,10 @@ void video_present(void);
 void video_output_size(int *w, int *h);
 /* Where the view lands in the window, in window pixels. */
 void video_view_rect(SDL_FRect *r);
-/* How the view is scaled to the window; changes from the next frame. */
-ViewFit video_fit(void);
-void video_set_fit(ViewFit f);
+/* The fixed view size, 0 x 0 when the view fills the window; a change applies from the next
+ * frame. */
+void video_view_size(int *w, int *h);
+void video_set_view_size(int w, int h);
 /* The refresh rate of the window's display, in Hz (60 if it isn't known). */
 int video_refresh_rate(void);
 

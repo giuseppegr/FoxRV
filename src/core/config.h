@@ -18,10 +18,6 @@
 
 typedef enum { AUDIO_ADLIB, AUDIO_SPEAKER } AudioDevice;
 
-/* How the game view is scaled to the window: whole pixels, as large as fits (same shape), or
- * stretched over all of it. */
-typedef enum { FIT_INTEGER, FIT_ASPECT, FIT_STRETCH, FIT_COUNT } ViewFit;
-
 typedef struct {
     /* [video] */
     int scale;              /* initial window height = scale x min_view_height */
@@ -32,7 +28,6 @@ typedef struct {
     int min_view_height;    /* fewest game pixels shown vertically; sets the pixel scale */
     int upscale;            /* art smoothing at load: 1 = none, 2..4; 0 = auto */
     int view_w, view_h;     /* fixed game view size, e.g. the original 320x200; 0 = fill the window */
-    ViewFit fit;
 
     /* [audio] */
     AudioDevice audio_device;   /* adlib or speaker */
@@ -51,10 +46,6 @@ typedef struct {
 typedef bool (*ConfigHandler)(const char *section, const char *key, const char *value);
 
 void settings_defaults(Settings *s);
-
-/* [video] fit's names: "integer", "aspect", "stretch". */
-const char *config_fit_name(ViewFit f);
-ViewFit config_fit_from_name(const char *name);
 
 /* Loads `path` over the current values. Returns false if the file couldn't be read. The
  * file read becomes the one config_save_value writes to. */

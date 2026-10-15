@@ -31,7 +31,7 @@ static const char *const row_help[ROW_COUNT] = {
 #if FOXRV_WITH_OPL
     "AdLib music card, or the PC speaker's beeps.",
 #endif
-    NULL,                       /* the fit's own description */
+    NULL,                       /* the screen choice's own description */
     "How far the stick must go up. Higher: fewer false ups.",
     "How long the pad must hold up. Longer: fewer false ups.",
     "Press each control in turn on the controller.",
@@ -41,12 +41,18 @@ static const char *const row_help[ROW_COUNT] = {
 #define THRESHOLD_STEP 5
 #define LOGIC_HZ 36.413
 
-static const char *const fit_labels[FIT_COUNT] = {"Whole pixels", "Fit", "Stretch"};
-static const char *const fit_help[FIT_COUNT] = {
-    "Pixels scaled by whole numbers: the sharpest.",
-    "As large as fits, same shape: slightly uneven pixels.",
-    "Fills the screen: slightly wider than the original.",
-};
+/* Screen: the original 320 x 200 view, or one that fills the window (more of the level). */
+static bool wide_view(void)
+{
+    int w, h;
+    video_view_size(&w, &h);
+    return w == 0;
+}
+
+static const char *screen_help(void)
+{
+    return wide_view() ? "Fills the screen: more of the level around Titus." : "The original's 320 x 200 screen.";
+}
 
 static const char *const difficulty_labels[DIFF_COUNT] = {"High", "Medium", "Low"};
 static const char *const difficulty_ini[DIFF_COUNT] = {"high", "medium", "low"};
@@ -158,9 +164,9 @@ static void change_value(Options *o, int row, int step, int *difficulty)
         ok = config_save_value("audio", "device", d == AUDIO_ADLIB ? "adlib" : "speaker");
 #endif
     } else if (row == ROW_SCREEN) {
-        ViewFit f = (ViewFit)((video_fit() + step + FIT_COUNT) % FIT_COUNT);
-        video_set_fit(f);
-        ok = config_save_value("video", "fit", config_fit_name(f));
+        bool wide = !wide_view();
+        video_set_view_size(wide ? 0 : 320, wide ? 0 : 200);
+        ok = config_save_value("video", "view_size", wide ? "auto" : "320x200");
     } else if (row == ROW_UP_THRESHOLD) {
         int t = input_pad_up_threshold() + step * THRESHOLD_STEP;
         t = t > PAD_UP_THRESHOLD_MAX ? PAD_UP_THRESHOLD_MIN : t < PAD_UP_THRESHOLD_MIN ? PAD_UP_THRESHOLD_MAX : t;
@@ -196,7 +202,7 @@ static void row_value(int row, int difficulty, char *buf, size_t size)
         SDL_strlcpy(buf, audio_device() == AUDIO_ADLIB ? "AdLib" : "PC speaker", size);
 #endif
     else if (row == ROW_SCREEN)
-        SDL_strlcpy(buf, fit_labels[video_fit()], size);
+        SDL_strlcpy(buf, wide_view() ? "Wide" : "Original", size);
     else if (row == ROW_UP_THRESHOLD)
         SDL_snprintf(buf, size, "%d%%", input_pad_up_threshold());
     else if (row == ROW_UP_DELAY && input_pad_up_delay() == 0)
@@ -539,7 +545,7 @@ void options_draw(const Options *o, int difficulty, SDL_Renderer *r, SDL_Color c
         SDL_snprintf(help, sizeof help, "Mapping %d of %d: %s", o->mapping + 1, OPTIONS_MAPPED, mapped[o->mapping].label);
     else
         SDL_strlcpy(help, o->list.sel == ROW_DIFFICULTY ? difficulty_help[difficulty]
-                          : o->list.sel == ROW_SCREEN   ? fit_help[video_fit()]
+                          : o->list.sel == ROW_SCREEN   ? screen_help()
                                                         : row_help[o->list.sel], sizeof help);
     text_wrapped(&u, l->margin, y, help, message ? 100 : 70, l->cut_text, l->help_lines);
     y += l->help_lines * l->line + l->gap_sep_before;
