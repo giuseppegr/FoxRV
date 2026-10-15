@@ -1,6 +1,7 @@
 # Build output
 build/
 build-debug/
+build-3ds/
 tools/build/
 
 # Python caches

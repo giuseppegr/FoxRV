@@ -7,7 +7,8 @@ A new engine for **Titus the Fox: To Marrakech and Back** (Titus, 1992, DOS), wr
 It plays the original levels with the original rules, measured from the game's own code:
 - physics, enemies, objects and elevators;
 - the camera; 
-- AdLib music and sound effects, through an emulated OPL chip.
+- AdLib music and sound effects, through an emulated OPL chip;
+- or the original's PC speaker music, on an emulated speaker.
 
 It also brings some modern comforts:
 - widescreen views (16:9 shows more of the level);
@@ -15,6 +16,8 @@ It also brings some modern comforts:
 - smooth display on high-refresh monitors;
 - gamepads;
 - optional Scale2x/Scale3x art smoothing.
+
+It also runs on the **Nintendo 3DS** (see below).
 
 **No game data is included.** You need your own copy of the DOS game.
 
@@ -63,15 +66,41 @@ build/FoxRV --selftest   headless checks of the physics against the original's v
 build/FoxRV --debug      print the engine's log (with any of the above)
 ```
 
-The game prints nothing unless `--debug` is given. On Windows it is a GUI program with no console window; `--debug`, `--selftest` and `--dump-opl` print to the terminal they were started from, or open a console if there is none. PowerShell doesn't wait for GUI programs, so to wait for the result and get the exit code, pipe the output: `build/FoxRV --selftest | Out-Host`.
+The game prints nothing unless `--debug` is given. On Windows it is a GUI program with no console window; `--debug`, `--selftest`, `--dump-opl` and `--dump-pcspk` print to the terminal they were started from, or open a console if there is none. PowerShell doesn't wait for GUI programs, so to wait for the result and get the exit code, pipe the output: `build/FoxRV --selftest | Out-Host`.
 
-Settings live in `engine.ini`: video, audio, controls, camera, difficulty and the original's physics constants. Every key is optional.
+Settings live in `engine.ini`: video, audio, controls, camera, difficulty and the original's physics constants. Every key is optional. `view_size = 320x200` in `[video]` shows exactly the original screen, scaled up and centred, instead of a view that grows with the window.
+
+`device` in `[audio]` picks the sound: `adlib` (the default) or `speaker`, the PC speaker's square-wave music. The original played no effects on the speaker; FoxRV adds short beeps, which silence the music while they play, as on a one-voice speaker.
 
 The frame rate follows the display (`vsync = 1`). Where the driver ignores vsync, as with Wine on Android (Winlator), the game notices within a second and caps itself at the display's refresh rate; `max_fps` sets a lower cap, e.g. 30 to save battery. The game itself always runs at its original speed.
 
 Gamepads (Xbox layout) by default: the D-pad or left stick moves and climbs, A jumps, B picks up and throws, Start pauses, Back opens the menu. Unlike the keyboard's Up, which jumps as in 1991, up on a pad doesn't jump (a worn stick or D-pad would trigger it by mistake), except to grab a ladder above; `pad_up_jumps = 1` in `[input]` makes it jump too. For worn controllers that slip into up, `pad_up_threshold` (how far the stick must be pushed up, 75% by default) and `pad_up_delay` (how long up must be held, 3 game frames, about 80 ms) can be raised, also in Options.
 
-**Options** on the main menu sets the difficulty and maps a controller: *Map controller* asks for each action in turn (press a button, or push a stick or trigger; Esc cancels), and *Reset controller* restores the default layout. Both are saved to `engine.ini`. The keyboard layout is fixed there and only shown. `fullscreen = 1` in `[video]` starts in full screen; F11 or Alt+Enter switch at any time.
+**Options** on the main menu sets the difficulty and the sound device, and maps a controller: *Map controller* asks for each action in turn (press a button, or push a stick or trigger; Esc, or holding Back for a second, cancels), and *Reset controller* restores the default layout. Both are saved to `engine.ini`. The keyboard layout is fixed there and only shown. `fullscreen = 1` in `[video]` starts in full screen; F11 or Alt+Enter switch at any time.
+
+## Nintendo 3DS
+
+The 3DS build plays the original 320x200 screen, centred on the top screen, with PC speaker sound (the AdLib emulator is too slow for the 3DS). The bottom screen stays black.
+
+**Building** needs [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the 3DS tools (on Windows, its installer with *3DS Development*). Its toolchain only runs from devkitPro's MSYS2 shell, so:
+
+```
+build-3ds.cmd    Windows: runs build-3ds.sh in devkitPro's MSYS2 (C:\devkitPro\msys2)
+./build-3ds.sh   in devkitPro's MSYS2 shell, or on Linux / macOS with DEVKITPRO set
+```
+
+Both make `build-3ds/FoxRV.3dsx`.
+
+**Installing**, on the SD card:
+
+```
+/3ds/FoxRV.3dsx
+/3ds/foxrv/game/       FOX.COM and the .SQZ files, as above
+```
+
+Start it from the Homebrew Launcher. On first run the default settings are copied to `/3ds/foxrv/engine.ini`, where Options saves its changes.
+
+**Controls:** the D-pad or Circle Pad moves and climbs, B jumps, A picks up and throws, Start pauses, Select opens the menu and goes back in menus. Options' *Map controller* changes them; hold Select to cancel it.
 
 ## Repository
 
@@ -81,5 +110,6 @@ Gamepads (Xbox layout) by default: the D-pad or left stick moves and climbs, A j
 | `src/core/fox_ds.h` | Where the game's tables are in FOX.COM's data segment |
 | `documentation/OVERVIEW.md` | How the original's files and code work |
 | `tools/` | Optional Python research tools that export the game's data as PNG, JSON, WAV and DRO files. Not needed to build or play. |
-| `res/` | The FoxRV icon, original pixel art drawn by `tools/make_icon.py` (which also writes `src/platform/icon_pixels.h`) |
+| `res/` | The FoxRV icon, original pixel art drawn by `tools/make_icon.py` (which also writes `src/platform/icon_pixels.h` and the 3DS icon) |
+| `res/3ds/` | The 3DS build's icon and the default `engine.ini` built into it |
 | `third_party/` | Nuked-OPL3, with its license |

@@ -3,7 +3,9 @@
 #include <math.h>
 
 #include "platform/gfx.h"
+#ifndef __3DS__
 #include "platform/icon_pixels.h"
+#endif
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
@@ -97,6 +99,7 @@ static int auto_upscale(void)
     return 4;
 }
 
+#ifndef __3DS__
 /* The FoxRV icon for the title bar and taskbar; the 16 px art is a variant for small sizes. */
 static void set_icon(void)
 {
@@ -109,6 +112,7 @@ static void set_icon(void)
     SDL_DestroySurface(small);
     SDL_DestroySurface(icon);
 }
+#endif
 
 bool video_init(const Settings *s, const char *title)
 {

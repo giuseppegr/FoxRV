@@ -31,6 +31,10 @@
 #include "platform/input.h"
 #include "platform/video.h"
 
+#ifdef __3DS__
+#include "platform/n3ds.h"
+#endif
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -151,6 +155,11 @@ static bool other_config(const char *section, const char *key, const char *value
 static void load_settings(Settings *s)
 {
     settings_defaults(s);
+#ifdef __3DS__
+    if (!config_load(s, n3ds_config_path(), other_config))
+        config_set_save_path(n3ds_config_path());
+    return;
+#endif
     if (config_load(s, "engine.ini", other_config))
         return;
     const char *base = SDL_GetBasePath();
@@ -177,7 +186,11 @@ int main(int argc, char **argv)
         if (headless)
             fprintf(stderr, "%s\n", assets_error());
         else
+#ifdef __3DS__
+            n3ds_fatal(assets_error());
+#else
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "FoxRV", assets_error(), NULL);
+#endif
         return 1;
     }
 

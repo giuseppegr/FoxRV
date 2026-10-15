@@ -42,9 +42,13 @@ static const char *const default_bindings[ACT_COUNT] = {
     "P, pad:start",
     "Escape, pad:back",
     "F11",
+#ifdef __3DS__
+    "PageUp", "PageDown", "M",  /* the 3DS has no other pad, so no debug buttons on it */
+#else
     "PageUp, pad:leftshoulder",
     "PageDown, pad:rightshoulder",
     "M, pad:y",
+#endif
     "S",
     "F",
     "F2",
