@@ -120,6 +120,17 @@ static void read_tail(Level *lv, const uint8_t *tail)
     copy_records(&lv->elevators[0][0], tail + TAIL_ELEVATORS, ELEVATOR_RECORDS, ELEVATOR_RECORD_SIZE);
 }
 
+/* A block that kills from above and is solid from below is solid from the sides too, as the
+ * levels flag it everywhere but one: "Road Works Ahead" leaves its wall flag clear, so the
+ * original walks through it. Pools (deadly floor, no ceiling) stay open. */
+static void fix_deadly_blocks(Level *lv)
+{
+    for (int t = 0; t < 256; t++)
+        if (lv->floor[t] >= FLOOR_DEADLY1 && lv->floor[t] <= FLOOR_DEADLY3 &&
+            (lv->ceiling[t] & 0x7F) == CEIL_SOLID && lv->wall[t] == WALL_NONE)
+            lv->wall[t] = WALL_SOLID;
+}
+
 /* The 256 tiles as a sheet of 16 x 16 tiles. */
 static bool read_tileset(Level *lv, const uint8_t *tiles)
 {
@@ -180,6 +191,7 @@ bool level_load(Level *lv, int index)
     if (ok) {
         memcpy(lv->map, data, map_bytes);
         read_tail(lv, data + map_bytes + TILESET_BYTES);
+        fix_deadly_blocks(lv);
     }
     SDL_free(data);
     if (!ok) {
