@@ -1067,7 +1067,8 @@ void game_render(Game *g, float alpha)
     const MenuArt *a = &g->art;
     switch (g->mode) {
     case MODE_INTRO:
-        menu_draw_picture(r, g->intro_stage == 0 ? a->logo : a->title);
+        if (!menu_picture_fills())           /* else drawn over the whole window, game_render_ui */
+            menu_draw_picture(r, g->intro_stage == 0 ? a->logo : a->title);
         break;
     case MODE_CREDITS:
         menu_draw_picture(r, a->credits);
@@ -1110,10 +1111,13 @@ void game_render(Game *g, float alpha)
 
 void game_render_ui(Game *g)
 {
+    uint8_t fade = (uint8_t)(g->fade * g->trans / 255);
+    if (g->mode == MODE_INTRO && menu_picture_fills())     /* edge to edge, like the original */
+        menu_draw_picture_filled(video_renderer(), g->intro_stage == 0 ? g->art.logo : g->art.title, fade);
     if (g->mode != MODE_OPTIONS)
         return;
     SDL_Color c = g->art.font.color;
     if (c.a == 0)                       /* no font: the text palette's yellow */
         c = (SDL_Color){255, 255, 85, 255};
-    options_draw(&g->options, tuning.difficulty, video_renderer(), c, (uint8_t)(g->fade * g->trans / 255));
+    options_draw(&g->options, tuning.difficulty, video_renderer(), c, fade);
 }

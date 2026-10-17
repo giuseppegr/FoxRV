@@ -38,6 +38,11 @@ int menu_origin_y(void);
 void menu_draw_picture(SDL_Renderer *r, SDL_Texture *pic);
 /* The same, `dy` game pixels lower (negative: higher). */
 void menu_draw_picture_at(SDL_Renderer *r, SDL_Texture *pic, int dy);
+/* Whether full-screen pictures fill the window: a view that fills it (not a fixed size). */
+bool menu_picture_fills(void);
+/* A full-screen picture filling the window (window pixels, after video_compose), as on the
+ * original's screen: one scale for both axes, the overflow cropped equally on both sides. */
+void menu_draw_picture_filled(SDL_Renderer *r, SDL_Texture *pic, uint8_t fade);
 /* Darkens whatever is already drawn (pause menu over the game). */
 void menu_dim(SDL_Renderer *r, uint8_t alpha);
 

@@ -143,6 +143,28 @@ void menu_draw_picture_at(SDL_Renderer *r, SDL_Texture *pic, int dy)
     SDL_RenderTexture(r, pic, NULL, &d);
 }
 
+bool menu_picture_fills(void)
+{
+    int w, h;
+    video_view_size(&w, &h);
+    return w == 0 || h == 0;
+}
+
+/* At 16:9 the scale is whole (x4 at 720p, x6 at 1080p) and 10 rows go at the top and bottom. */
+void menu_draw_picture_filled(SDL_Renderer *r, SDL_Texture *pic, uint8_t fade)
+{
+    int ww, wh;
+    video_output_size(&ww, &wh);
+    if (!pic || ww <= 0 || wh <= 0)
+        return;
+    float k = SDL_max(ww / (float)SCREEN_W, wh / (float)SCREEN_H);
+    float w = SCREEN_W * k, h = SCREEN_H * k;
+    SDL_FRect d = {SDL_floorf((ww - w) / 2), SDL_floorf((wh - h) / 2), w, h};
+    SDL_SetTextureColorMod(pic, fade, fade, fade);
+    SDL_RenderTexture(r, pic, NULL, &d);
+    SDL_SetTextureColorMod(pic, 255, 255, 255);
+}
+
 void menu_dim(SDL_Renderer *r, uint8_t alpha)
 {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
