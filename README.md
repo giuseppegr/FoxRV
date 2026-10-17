@@ -17,7 +17,7 @@ It also brings some modern comforts:
 - gamepads;
 - optional Scale2x/Scale3x art smoothing.
 
-It also runs on the **Nintendo 3DS** (see below).
+It also runs on the **Nintendo 3DS** and **2DS** (see below).
 
 **No game data is included.** You need your own copy of the DOS game.
 
@@ -85,9 +85,9 @@ Gamepads (Xbox layout) by default: the D-pad or left stick moves and climbs, A j
 
 **Options** on the main menu sets the difficulty, the sound device and the screen size, and maps a controller: *Map controller* asks for each action in turn (press a button, or push a stick or trigger; Esc, or holding Back for a second, cancels), and *Reset controller* restores the default layout. Both are saved to `engine.ini`. The keyboard layout is fixed there and only shown. `fullscreen = 1` in `[video]` starts in full screen; F11 or Alt+Enter switch at any time.
 
-## Nintendo 3DS
+## Nintendo 3DS and 2DS
 
-The 3DS build fills the 400x240 top screen with more of the level than the original's 320x200 (Options > *Screen* > *Original* shows just that, centred), with PC speaker sound (the AdLib emulator is too slow for the 3DS). The bottom screen stays black.
+The 3DS build also plays on the 2DS: everything below applies to both. It fills the 400x240 top screen with more of the level than the original's 320x200 (Options > *Screen* > *Original* shows just that, centred), with PC speaker sound (the AdLib emulator is too slow for the 3DS). The bottom screen stays black.
 
 **Building** needs [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the 3DS tools (on Windows, its installer with *3DS Development*). Its toolchain only runs from devkitPro's MSYS2 shell, so:
 
