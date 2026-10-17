@@ -28,6 +28,12 @@ It also runs on the **Nintendo 3DS** and **2DS**, and on **Android** through the
   <img src="res/screenshots/level12.png" alt="Level 12" width="49%">
 </p>
 
+## Background
+
+*Titus the Fox* is one of the games I played most as a child. I still remember how hard and unforgiving it was: hours and hours spent retrying levels, and I managed to finish it only once or twice. It was very frustrating, but it also teaches you that winning isn't always easy, and that it takes perseverance and patience to get there. In my opinion it's one of the best games Titus published in the '90s.
+
+FoxRV is not a remake: it tries to mimic the original game's mechanics while adding a few modern comforts, such as a choice of difficulty and gamepad support, so in places it may feel a little different from the original. Feel free to modify it or use it as you like, create new levels, or even make your own mods.
+
 ## Game files
 
 Put the original game's files in a folder named `game` next to the executable:
