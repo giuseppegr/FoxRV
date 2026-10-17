@@ -1,0 +1,46 @@
+# Builds the Linux release zip (see build.sh) and, for a pushed tag such as v0.1.0, publishes
+# it as a GitHub Release. It builds in Debian 12, whose older glibc (2.36) lets the binary run
+# on most distributions from 2022 on; one built on a newer system needs that system's glibc.
+# Run by hand (Actions > Release > Run workflow), it only keeps the zip as a build artifact.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - name: Install build tools and SDL3's dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates build-essential cmake \
+            git ninja-build pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libdecor-0-dev libegl-dev libgl-dev libasound2-dev libpulse-dev \
+            libpipewire-0.3-dev libudev-dev libdbus-1-dev
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Keep the zip as an artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FoxRV-linux
+          path: build/FoxRV-*-linux-*.zip
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/FoxRV-*-linux-*.zip
+          generate_release_notes: true

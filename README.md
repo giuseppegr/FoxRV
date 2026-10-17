@@ -68,6 +68,8 @@ cmake --build build -j
 
 The Windows build is a single `FoxRV.exe` that needs no DLLs besides Windows' own.
 
+`build.sh` also packs `build/FoxRV-<version>-linux-<arch>.zip`: the binary, `engine.ini` and an empty `game` folder. Pushing a tag such as `v0.1.0` makes GitHub build that zip on Debian 12 (so it runs on older distributions too) and publish it under Releases (`.github/workflows/release.yml`).
+
 If `-DFOXRV_GAME_SOURCE=/path/to/your/game` is given, every build copies that folder to `build/game`. By default it is `TTF/` in the source tree. The game files are git-ignored.
 
 ## Running

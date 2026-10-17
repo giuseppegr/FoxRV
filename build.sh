@@ -17,6 +17,10 @@
 #
 # Extra arguments go to CMake's configure step, e.g.
 #   ./build.sh -DFOXRV_GAME_SOURCE=~/games/fox
+#
+# It also packs a release zip, build/FoxRV-<version>-linux-<arch>.zip, for GitHub's
+# Releases: a FoxRV folder with the binary, engine.ini and an empty game/ folder. The game's
+# own files in build/game are never packed.
 set -e
 cd "$(dirname "$0")"
 
@@ -36,5 +40,18 @@ fi
 # shellcheck disable=SC2086  # $generator is two words or none
 cmake -S . -B build $generator -DCMAKE_BUILD_TYPE=Release "$@"
 cmake --build build --parallel "$(nproc 2>/dev/null || echo 4)"
+
+# The release zip, assembled in its own folder so build/game (the game's files) stays out.
+version=$(sed -n 's/^CMAKE_PROJECT_VERSION:STATIC=//p' build/CMakeCache.txt)
+zip_name="FoxRV-$version-linux-$(uname -m).zip"
+rm -rf build/release "build/$zip_name"
+mkdir -p build/release/FoxRV/game
+cp build/FoxRV engine.ini build/release/FoxRV/
+if command -v strip >/dev/null 2>&1; then
+    strip build/release/FoxRV/FoxRV
+fi
+(cd build/release && cmake -E tar cf "../$zip_name" --format=zip FoxRV)
+
 echo
 echo "Built build/FoxRV. Put the original game's files in build/game (see README.md)."
+echo "Release: build/$zip_name"
