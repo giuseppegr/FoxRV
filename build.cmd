@@ -8,6 +8,10 @@ rem itself; another MSYS2 folder has to be on PATH.
 rem
 rem Extra arguments go to CMake's configure step, e.g.
 rem     build.cmd -DFOXRV_GAME_SOURCE=C:\Games\Fox
+rem
+rem It also packs a release zip, build\FoxRV-<version>-windows-<arch>.zip, for GitHub's
+rem Releases: a FoxRV folder with FoxRV.exe, engine.ini and an empty game folder. The game's
+rem own files in build\game are never packed.
 setlocal
 cd /d "%~dp0"
 
@@ -24,8 +28,24 @@ if not exist build\CMakeCache.txt (
 
 cmake -S . -B build %GENERATOR% -DCMAKE_BUILD_TYPE=Release %* || goto :fail
 cmake --build build --parallel %NUMBER_OF_PROCESSORS% || goto :fail
+
+rem The release zip, assembled in its own folder so build\game (the game's files) stays out.
+for /f "tokens=2 delims==" %%v in ('findstr /b "CMAKE_PROJECT_VERSION:STATIC=" build\CMakeCache.txt') do set "VERSION=%%v"
+for /f "tokens=1 delims=-" %%a in ('gcc -dumpmachine') do set "ARCH=%%a"
+set "ZIP_NAME=FoxRV-%VERSION%-windows-%ARCH%.zip"
+if exist build\release rmdir /s /q build\release
+if exist "build\%ZIP_NAME%" del "build\%ZIP_NAME%"
+mkdir build\release\FoxRV\game || goto :fail
+copy /y build\FoxRV.exe build\release\FoxRV\ >nul || goto :fail
+copy /y engine.ini build\release\FoxRV\ >nul || goto :fail
+where strip >nul 2>nul && strip build\release\FoxRV\FoxRV.exe
+pushd build\release
+cmake -E tar cf "..\%ZIP_NAME%" --format=zip FoxRV || (popd & goto :fail)
+popd
+
 echo.
 echo Built build\FoxRV.exe. Put the original game's files in build\game (see README.md).
+echo Release: build\%ZIP_NAME%
 exit /b 0
 
 :find_msys2

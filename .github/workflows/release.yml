@@ -1,7 +1,8 @@
-# Builds the Linux release zip (see build.sh) and, for a pushed tag such as v0.1.0, publishes
-# it as a GitHub Release. It builds in Debian 12, whose older glibc (2.36) lets the binary run
-# on most distributions from 2022 on; one built on a newer system needs that system's glibc.
-# Run by hand (Actions > Release > Run workflow), it only keeps the zip as a build artifact.
+# Builds the Linux and Windows release zips (see build.sh and build.cmd) and, for a pushed tag
+# such as v0.1.0, publishes both as a GitHub Release. Linux builds in Debian 12, whose older
+# glibc (2.36) lets the binary run on most distributions from 2022 on; one built on a newer
+# system needs that system's glibc. Windows builds with MSYS2's UCRT64 GCC, as build.cmd does.
+# Run by hand (Actions > Release > Run workflow), it only keeps the zips as build artifacts.
 name: Release
 
 on:
@@ -31,16 +32,47 @@ jobs:
       - name: Build
         run: ./build.sh
 
-      - name: Keep the zip as an artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: FoxRV-linux
           path: build/FoxRV-*-linux-*.zip
 
-      - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  windows:
+    runs-on: windows-latest
+    steps:
+      # The runner's own C:\msys64, where build.cmd looks for GCC.
+      - uses: msys2/setup-msys2@v2
         with:
-          files: build/FoxRV-*-linux-*.zip
+          release: false
+          update: false
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FoxRV-windows
+          path: build/FoxRV-*-windows-*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
           generate_release_notes: true
