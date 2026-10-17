@@ -21,6 +21,13 @@ It also runs on the **Nintendo 3DS** (see below).
 
 **No game data is included.** You need your own copy of the DOS game.
 
+<p align="center">
+  <img src="res/screenshots/level1.png" alt="Level 1 in the 16:9 view" width="49%">
+  <img src="res/screenshots/level3.png" alt="Level 3" width="49%">
+  <img src="res/screenshots/level6.png" alt="Level 6" width="49%">
+  <img src="res/screenshots/level12.png" alt="Level 12" width="49%">
+</p>
+
 ## Game files
 
 Put the original game's files in a folder named `game` next to the executable:
@@ -112,4 +119,11 @@ Start it from the Homebrew Launcher. On first run the default settings are copie
 | `tools/` | Optional Python research tools that export the game's data as PNG, JSON, WAV and DRO files. Not needed to build or play. |
 | `res/` | The FoxRV icon, original pixel art drawn by `tools/make_icon.py` (which also writes `src/platform/icon_pixels.h` and the 3DS icon) |
 | `res/3ds/` | The 3DS build's icon and the default `engine.ini` built into it |
+| `res/screenshots/` | The screenshots above, taken with `--shot` |
 | `third_party/` | Nuked-OPL3, with its license |
+
+## License
+
+FoxRV's code is licensed under the [GNU GPL v3](LICENSE). Nuked-OPL3 in `third_party/` keeps its own license (LGPL 2.1).
+
+FoxRV is an unofficial fan project, not affiliated with or endorsed by Titus or its successors. *Titus the Fox* and its art, music and levels belong to their rights holders; the screenshots show that art only to illustrate the engine.
