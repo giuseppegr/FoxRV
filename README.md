@@ -126,6 +126,11 @@ The Windows build, `FoxRV.exe`, plays on Android phones and tablets in a Windows
 | `res/screenshots/` | The screenshots above, taken with `--shot` |
 | `third_party/` | Nuked-OPL3, with its license |
 
+## Thanks
+
+- **[SDL3](https://www.libsdl.org/)** by Sam Lantinga and the SDL contributors, for the window, graphics, sound and gamepads on every platform FoxRV runs on (zlib license).
+- **[Nuked-OPL3](https://github.com/nukeykt/Nuked-OPL3)** by Nuke.YKT, the cycle-accurate OPL3 emulator that plays the AdLib music and effects as the real chip did (LGPL 2.1).
+
 ## License
 
 FoxRV's code is licensed under the [GNU GPL v3](LICENSE). Nuked-OPL3 in `third_party/` keeps its own license (LGPL 2.1).
