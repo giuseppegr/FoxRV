@@ -17,7 +17,7 @@ It also brings some modern comforts:
 - gamepads;
 - optional Scale2x/Scale3x art smoothing.
 
-It also runs on the **Nintendo 3DS** and **2DS** (see below).
+It also runs on the **Nintendo 3DS** and **2DS**, and on **Android** through the Windows build (see below).
 
 **No game data is included.** You need your own copy of the DOS game.
 
@@ -108,6 +108,10 @@ Both make `build-3ds/FoxRV.3dsx`.
 Start it from the Homebrew Launcher. On first run the default settings are copied to `/3ds/foxrv/engine.ini`, where Options saves its changes.
 
 **Controls:** the D-pad or Circle Pad moves and climbs, B jumps, A picks up and throws, Start pauses, Select opens the menu and goes back in menus. Options' *Map controller* changes them; hold Select to cancel it.
+
+## Android
+
+The Windows build, `FoxRV.exe`, plays on Android phones and tablets in a Windows emulator app: [Winlator](https://github.com/brunodev85/winlator), GameNative or GameHub. Copy `FoxRV.exe`, `engine.ini` and the `game` folder together into a folder the app can see, and start `FoxRV.exe` from it. Where the app ignores vsync, the game caps its own frame rate (see *Running*); `max_fps = 30` saves battery.
 
 ## Repository
 
